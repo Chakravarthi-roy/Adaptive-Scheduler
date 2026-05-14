@@ -1,6 +1,5 @@
 // ─── CONFIG ─────────────────────────────────────────────
-const API_BASE = 'https://adaptive-scheduler-api.onrender.com' // 👈 update this after deploying backend
-// const API_BASE = 'http://localhost:8000' // use this for local dev
+const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com' // 👈 update this after deploying backend
 // ────────────────────────────────────────────────────────
 
 // VAPID public key
