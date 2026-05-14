@@ -1,0 +1,15 @@
+# Python
+backend/__pycache__/
+backend/*.pyc
+backend/*.webm
+
+# Environment
+.env
+backend/.env
+
+venv/
+backend/venv/
+
+# General
+*.pyc
+__pycache__/

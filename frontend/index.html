@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Adaptive Scheduler</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">Scheduler</div>
+      <nav>
+        <a href="#" class="nav-item active">Today</a>
+        <a href="#" class="nav-item">Upcoming</a>
+        <a href="#" class="nav-item">Recurring</a>
+        <a href="#" class="nav-item">Done</a>
+        <a href="#" class="nav-item">Settings</a>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <div class="main-header">
+        <div class="page-title">Today</div>
+        <div class="page-sub" id="today-date"></div>
+      </div>
+
+      <div class="reminders-area" id="reminders-area">
+        <!-- reminder cards go here -->
+        <div class="empty-state">No reminders yet. Tap the mic and speak.</div>
+      </div>
+
+      <div class="mic-area">
+        <button class="mic-btn" id="mic-btn" aria-label="Record voice reminder">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+        <span class="mic-label" id="mic-label">tap to speak</span>
+        <span class="mic-status" id="mic-status"></span>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- confirmation modal -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <div class="modal-title">Confirm reminder</div>
+      <div class="modal-heard" id="modal-heard"></div>
+      <div class="field">
+        <label>Title</label>
+        <input type="text" id="field-title" />
+      </div>
+      <div class="field">
+        <label>Date & time</label>
+        <input type="datetime-local" id="field-datetime" />
+      </div>
+      <div class="field">
+        <label>Location</label>
+        <input type="text" id="field-location" placeholder="optional" />
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <select id="field-type">
+          <option>meeting</option>
+          <option>medication</option>
+          <option>task</option>
+          <option>casual</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Repeat</label>
+        <select id="field-repeat">
+          <option value="none">None</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="btn-cancel">Cancel</button>
+        <button class="btn-save" id="btn-save">Save reminder</button>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
