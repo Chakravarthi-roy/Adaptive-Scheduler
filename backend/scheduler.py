@@ -1,15 +1,17 @@
 import schedule
 import time
 import json
-import requests
+import pytz
 from database import SessionLocal, Reminder
 from datetime import datetime, timedelta
 from main import send_notification
 
+IST = pytz.timezone('Asia/Kolkata')
+
 def check_reminders():
     db = SessionLocal()
     try:
-        now = datetime.now()
+        now = datetime.now(IST).replace(tzinfo=None)
         window_start = now - timedelta(seconds=30)
         window_end = now + timedelta(seconds=30)
 
@@ -21,12 +23,10 @@ def check_reminders():
         ).all()
 
         for reminder in due:
-            # build notification message
             body = reminder.datetime.strftime("%I:%M %p")
             if reminder.location:
                 body += f" · {reminder.location}"
 
-            # persistent for medication, normal for others
             persistent = reminder.type == "medication"
 
             result = send_notification(
@@ -35,11 +35,9 @@ def check_reminders():
                 persistent
             )
 
-            # mark as notified
             if result.get("status") == "sent":
                 reminder.notified = True
 
-                # handle recurring — reset for next occurrence
                 if reminder.repeat == "daily":
                     reminder.datetime = reminder.datetime + timedelta(days=1)
                     reminder.notified = False
@@ -53,7 +51,6 @@ def check_reminders():
     finally:
         db.close()
 
-# run every minute
 schedule.every(1).minutes.do(check_reminders)
 
 print("scheduler running...")

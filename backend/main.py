@@ -9,8 +9,11 @@ import json
 import uuid
 import os
 import tempfile
+import pytz
 
 load_dotenv()
+
+IST = pytz.timezone('Asia/Kolkata')
 
 client = groq.Groq(
     api_key=os.getenv("GROQ_API_KEY"),
@@ -58,7 +61,7 @@ async def transcribe(audio: UploadFile = File(...)):
 @app.post("/extract")
 async def extract(data: dict):
     transcript = data.get("transcript", "")
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    now = datetime.now(IST).strftime("%Y-%m-%d %H:%M")
 
     prompt = f"""
 You are a reminder extraction assistant.
