@@ -13,8 +13,6 @@ import pytz
 
 load_dotenv()
 
-IST = pytz.timezone('Asia/Kolkata')
-
 client = groq.Groq(
     api_key=os.getenv("GROQ_API_KEY"),
     timeout=60.0
@@ -22,8 +20,9 @@ client = groq.Groq(
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
 VAPID_EMAIL = os.getenv("VAPID_EMAIL")
-
 FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
+
+IST = pytz.timezone('Asia/Kolkata')
 
 app = FastAPI()
 
@@ -36,15 +35,129 @@ app.add_middleware(
 
 init_db()
 
-@app.get("/")
+# ─── Agent Tools Definition ───────────────────────────────────────────────────
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_reminders",
+            "description": "Get all existing reminders to understand the user's current schedule. Use this to resolve relative references like 'after my exam', 'before my meeting', etc.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ask_user",
+            "description": "Ask the user a clarifying question when information is missing or ambiguous. Use this when you need duration, exact time, or any detail you cannot infer.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "A short, clear question to ask the user. Keep it conversational and friendly."
+                    }
+                },
+                "required": ["question"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_reminder",
+            "description": "Create a reminder once you have all the necessary information. Call this when you are confident about the reminder details.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Short, clean title for the reminder. Strip filler words."
+                    },
+                    "datetime": {
+                        "type": "string",
+                        "description": "ISO format datetime YYYY-MM-DDTHH:MM:00 or null if not applicable"
+                    },
+                    "location": {
+                        "type": "string",
+                        "description": "Location or null"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": ["meeting", "medication", "task", "casual"],
+                        "description": "Type of reminder"
+                    },
+                    "repeat": {
+                        "type": "string",
+                        "enum": ["none", "daily", "weekly"],
+                        "description": "Repeat frequency"
+                    },
+                    "participants": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of participant names if any"
+                    }
+                },
+                "required": ["title", "type", "repeat"]
+            }
+        }
+    }
+]
+
+SYSTEM_PROMPT = """You are a smart reminder assistant that helps users create reminders from voice or text input.
+
+You have access to three tools:
+1. get_reminders — to see the user's existing schedule
+2. ask_user — to ask ONE clarifying question when needed
+3. create_reminder — to create the reminder once you have all details
+
+Rules:
+- Always call get_reminders first to understand the user's existing schedule
+- If the user says "after my exam/meeting/task", look at existing reminders to calculate the time
+- If you need duration or any unclear detail, use ask_user to ask ONE focused question
+- Strip filler words like ra, yaar, na, bro, da from titles
+- "evening" = 18:00, "morning" = 08:00, "night" = 21:00, "in a bit" = 10 mins from now
+- "next sunday" = sunday of next week
+- Keep titles short and clean
+- Be conversational and friendly in questions
+- Once you have all info, call create_reminder immediately
+- Never ask more than necessary — infer what you can"""
+
+
+def get_reminders_tool():
+    db = SessionLocal()
+    try:
+        reminders = db.query(Reminder).filter(Reminder.done == False).order_by(Reminder.datetime).all()
+        return [
+            {
+                "id": r.id,
+                "title": r.title,
+                "datetime": r.datetime.isoformat() if r.datetime else None,
+                "type": r.type,
+                "repeat": r.repeat
+            }
+            for r in reminders
+        ]
+    finally:
+        db.close()
+
+
+# ─── Routes ───────────────────────────────────────────────────────────────────
+
+@app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {"status": "backend running"}
+
 
 @app.post("/transcribe")
 async def transcribe(audio: UploadFile = File(...)):
     audio_bytes = await audio.read()
 
-    # use tempfile instead of hardcoded path (safe for production)
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
@@ -58,56 +171,79 @@ async def transcribe(audio: UploadFile = File(...)):
     os.remove(tmp_path)
     return {"transcript": transcript.text}
 
-@app.post("/extract")
-async def extract(data: dict):
-    transcript = data.get("transcript", "")
+
+@app.post("/agent")
+async def agent(data: dict):
+    """
+    Main agent endpoint. Accepts conversation history and returns either:
+    - { "type": "question", "text": "...", "messages": [...] }
+    - { "type": "reminder", "data": {...}, "messages": [...] }
+    """
+    messages = data.get("messages", [])
     now = datetime.now(IST).strftime("%Y-%m-%d %H:%M")
 
-    prompt = f"""
-You are a reminder extraction assistant.
-Current date and time: {now}
+    full_messages = [
+        {"role": "system", "content": f"{SYSTEM_PROMPT}\n\nCurrent date and time (IST): {now}"}
+    ] + messages
 
-Extract reminder details from this voice input and return ONLY a JSON object.
-No explanation, no markdown, no extra text. Just the JSON.
+    for _ in range(10):
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=full_messages,
+            tools=TOOLS,
+            tool_choice="auto",
+            temperature=0
+        )
 
-Voice input: "{transcript}"
+        message = response.choices[0].message
 
-Return this exact structure:
-{{
-  "title": "short clear title",
-  "datetime": "YYYY-MM-DDTHH:MM:00 or null if unclear",
-  "location": "location or null",
-  "type": "meeting or medication or task or casual",
-  "repeat": "none or daily or weekly",
-  "participants": ["name"] or []
-}}
+        if not message.tool_calls:
+            return {"type": "question", "text": message.content, "messages": full_messages}
 
-Rules:
-- "evening" means 18:00
-- "morning" means 08:00
-- "night" means 21:00
-- "in a bit" means 10 minutes from now
-- "next sunday" always means the sunday of next week
-- strip filler words like ra, yaar, na, bro from the title
-- if time is missing set datetime to null
-- if no location set null
-- keep title short and clean
-"""
+        full_messages.append({
+            "role": "assistant",
+            "content": message.content,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments
+                    }
+                }
+                for tc in message.tool_calls
+            ]
+        })
 
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
+        for tool_call in message.tool_calls:
+            fn_name = tool_call.function.name
+            fn_args = json.loads(tool_call.function.arguments)
 
-    raw = response.choices[0].message.content.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
+            if fn_name == "get_reminders":
+                result = get_reminders_tool()
+                full_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result)
+                })
 
-    extracted = json.loads(raw.strip())
-    return extracted
+            elif fn_name == "ask_user":
+                return {
+                    "type": "question",
+                    "text": fn_args["question"],
+                    "messages": full_messages
+                }
+
+            elif fn_name == "create_reminder":
+                return {
+                    "type": "reminder",
+                    "data": fn_args,
+                    "messages": full_messages
+                }
+
+    return {"type": "error", "text": "Something went wrong. Please try again."}
+
 
 @app.post("/reminders")
 def save_reminder(data: dict):
@@ -128,6 +264,7 @@ def save_reminder(data: dict):
         return {"status": "saved", "id": reminder.id}
     finally:
         db.close()
+
 
 @app.get("/reminders")
 def get_reminders():
@@ -150,6 +287,7 @@ def get_reminders():
     finally:
         db.close()
 
+
 @app.patch("/reminders/{reminder_id}/done")
 def mark_done(reminder_id: str):
     db = SessionLocal()
@@ -162,6 +300,7 @@ def mark_done(reminder_id: str):
         return {"status": "not found"}
     finally:
         db.close()
+
 
 @app.post("/subscribe")
 def subscribe(data: dict):
@@ -178,6 +317,7 @@ def subscribe(data: dict):
     finally:
         db.close()
 
+
 @app.get("/send-test-notification")
 @app.post("/send-test-notification")
 def send_test():
@@ -185,6 +325,7 @@ def send_test():
         "Test Notification 🔔",
         "Your Adaptive Scheduler notifications are working!"
     )
+
 
 def send_notification(title, body, persistent=False):
     db = SessionLocal()

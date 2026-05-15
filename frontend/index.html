@@ -26,33 +26,50 @@
       </div>
 
       <div class="reminders-area" id="reminders-area">
-        <!-- reminder cards go here -->
         <div class="empty-state">No reminders yet. Tap the mic and speak.</div>
       </div>
 
+      <!-- chat bubbles area -->
+      <div class="chat-bubbles" id="chat-bubbles"></div>
+
+      <!-- mic + type area -->
       <div class="mic-area">
-        <button class="mic-btn" id="mic-btn" aria-label="Record voice reminder">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"
-            viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-            <line x1="12" y1="19" x2="12" y2="23"/>
-            <line x1="8" y1="23" x2="16" y2="23"/>
-          </svg>
-        </button>
+        <div class="mic-row">
+          <button class="mic-btn" id="mic-btn" aria-label="Record voice reminder">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
+          <!-- type button — shown only when agent asks a question -->
+          <button class="type-btn" id="type-btn" aria-label="Type reply" title="Type your reply">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/>
+            </svg>
+          </button>
+        </div>
         <span class="mic-label" id="mic-label">tap to speak</span>
         <span class="mic-status" id="mic-status"></span>
+
+        <!-- type input area -->
+        <div class="type-area" id="type-area">
+          <input type="text" id="type-input" placeholder="Type your reply..." />
+          <button id="type-send">Send</button>
+        </div>
       </div>
     </main>
-
   </div>
 
   <!-- confirmation modal -->
   <div class="overlay" id="overlay">
     <div class="modal">
       <div class="modal-title">Confirm reminder</div>
-      <div class="modal-heard" id="modal-heard"></div>
       <div class="field">
         <label>Title</label>
         <input type="text" id="field-title" />
@@ -88,6 +105,7 @@
       </div>
     </div>
   </div>
+
   <script src="app.js"></script>
 </body>
 </html>

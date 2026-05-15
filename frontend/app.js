@@ -1,8 +1,8 @@
-// ─── CONFIG ─────────────────────────────────────────────
-const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com' // 👈 update this after deploying backend
-// ────────────────────────────────────────────────────────
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com' // 👈 your backend URL
+// const API_BASE = 'http://localhost:8000'
+// ─────────────────────────────────────────────────────────────────────────────
 
-// VAPID public key
 const VAPID_PUBLIC_KEY = 'BLdUTJ82_k03z93xAJadQ2U58tp-V5ICr_g4Hf_20L6uJ0C9XDnLHxgux-UOJ-QjLMFzoTaP4oTwx5FktGWeSyY'
 
 function urlBase64ToUint8Array(base64String) {
@@ -13,20 +13,12 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 async function initPush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    console.log('push not supported')
-    return
-  }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
   try {
     const reg = await navigator.serviceWorker.register('./sw.js')
-    console.log('service worker registered')
     await navigator.serviceWorker.ready
-    console.log('service worker ready')
     const permission = await Notification.requestPermission()
-    if (permission !== 'granted') {
-      console.log('notification permission denied')
-      return
-    }
+    if (permission !== 'granted') return
     const subscription = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
@@ -36,7 +28,6 @@ async function initPush() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(subscription)
     })
-    console.log('push subscription saved')
   } catch (err) {
     console.error('push setup error:', err)
   }
@@ -44,25 +35,38 @@ async function initPush() {
 
 initPush()
 
-// set today's date
-const dateEl = document.getElementById('today-date')
-dateEl.textContent = new Date().toLocaleDateString('en-US', {
+// ─── Date ─────────────────────────────────────────────────────────────────────
+document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-US', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
 })
 
-// mic state
-const micBtn = document.getElementById('mic-btn')
-const micLabel = document.getElementById('mic-label')
-const micStatus = document.getElementById('mic-status')
+// ─── State ────────────────────────────────────────────────────────────────────
 let mediaRecorder = null
 let audioChunks = []
 let recording = false
+let agentMessages = []       // conversation history sent to /agent
+let awaitingReply = false    // true when agent asked a question
 
+// ─── Elements ─────────────────────────────────────────────────────────────────
+const micBtn = document.getElementById('mic-btn')
+const micLabel = document.getElementById('mic-label')
+const micStatus = document.getElementById('mic-status')
+const typeBtn = document.getElementById('type-btn')
+const typeArea = document.getElementById('type-area')
+const typeInput = document.getElementById('type-input')
+const typeSend = document.getElementById('type-send')
+const chatBubbles = document.getElementById('chat-bubbles')
+const overlay = document.getElementById('overlay')
+const btnCancel = document.getElementById('btn-cancel')
+const btnSave = document.getElementById('btn-save')
+
+// ─── Mic State ────────────────────────────────────────────────────────────────
 function setMicState(state) {
   micBtn.classList.remove('recording', 'processing')
-  switch(state) {
+  typeBtn.style.display = awaitingReply ? 'flex' : 'none'
+  switch (state) {
     case 'idle':
-      micLabel.textContent = 'tap to speak'
+      micLabel.textContent = awaitingReply ? 'tap to reply' : 'tap to speak'
       micStatus.textContent = ''
       break
     case 'recording':
@@ -78,11 +82,28 @@ function setMicState(state) {
     case 'thinking':
       micBtn.classList.add('processing')
       micLabel.textContent = 'thinking...'
-      micStatus.textContent = '🧠 extracting reminder'
+      micStatus.textContent = '🧠 agent is working'
       break
   }
 }
 
+// ─── Chat Bubbles ─────────────────────────────────────────────────────────────
+function addBubble(text, role) {
+  const wrap = document.createElement('div')
+  wrap.className = `bubble-wrap ${role}`
+  const bubble = document.createElement('div')
+  bubble.className = `bubble bubble-${role}`
+  bubble.textContent = text
+  wrap.appendChild(bubble)
+  chatBubbles.appendChild(wrap)
+  chatBubbles.scrollTop = chatBubbles.scrollHeight
+}
+
+function clearBubbles() {
+  chatBubbles.innerHTML = ''
+}
+
+// ─── Recording ────────────────────────────────────────────────────────────────
 micBtn.addEventListener('click', async () => {
   if (!recording) {
     await startRecording()
@@ -96,95 +117,127 @@ async function startRecording() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     mediaRecorder = new MediaRecorder(stream)
     audioChunks = []
-
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunks.push(e.data)
-    }
-
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data) }
     mediaRecorder.onstop = async () => {
       const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
-      await sendToBackend(audioBlob)
+      await handleAudioInput(audioBlob)
       stream.getTracks().forEach(t => t.stop())
     }
-
     mediaRecorder.start()
     recording = true
     setMicState('recording')
-
   } catch (err) {
-    alert('Microphone access denied. Please allow mic access and try again.')
+    alert('Microphone access denied.')
     console.error(err)
   }
 }
 
 function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop()
-  }
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop()
   recording = false
   setMicState('processing')
 }
 
-async function sendToBackend(audioBlob) {
+// ─── Type Button ──────────────────────────────────────────────────────────────
+typeBtn.addEventListener('click', () => {
+  typeArea.classList.toggle('show')
+  typeInput.focus()
+})
+
+typeSend.addEventListener('click', () => sendTypedReply())
+typeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendTypedReply()
+})
+
+function sendTypedReply() {
+  const text = typeInput.value.trim()
+  if (!text) return
+  typeInput.value = ''
+  typeArea.classList.remove('show')
+  handleTextInput(text)
+}
+
+// ─── Input Handlers ───────────────────────────────────────────────────────────
+async function handleAudioInput(audioBlob) {
+  if (audioBlob.size < 1000) {
+    setMicState('idle')
+    alert('Recording too short — please speak for at least 2 seconds.')
+    return
+  }
+
+  setMicState('processing')
+
   try {
-    setMicState('processing')
-    console.log('audio blob size:', audioBlob.size, 'bytes')
-
-    if (audioBlob.size < 1000) {
-      setMicState('idle')
-      alert('Recording too short — please speak for at least 2 seconds.')
-      return
-    }
-
     const formData = new FormData()
     formData.append('audio', audioBlob, 'recording.webm')
+    const res = await fetch(`${API_BASE}/transcribe`, { method: 'POST', body: formData })
+    const data = await res.json()
+    const transcript = data.transcript?.trim()
 
-    console.log('sending to Whisper...')
-    const transcribeRes = await fetch(`${API_BASE}/transcribe`, {
-      method: 'POST',
-      body: formData
-    })
-    const rawText = await transcribeRes.text()
-    console.log('raw response:', rawText)
-    const transcribeData = JSON.parse(rawText)
-    const transcript = transcribeData.transcript
-    console.log('transcript:', transcript)
-
-    if (!transcript || transcript.trim() === '') {
+    if (!transcript) {
       setMicState('idle')
-      alert('Could not hear anything. Try speaking louder or closer to the mic.')
+      alert('Could not hear anything. Try speaking louder.')
       return
     }
 
-    setMicState('thinking')
-    console.log('extracting intent...')
-    const extractRes = await fetch(`${API_BASE}/extract`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript })
-    })
-    const extracted = await extractRes.json()
-    console.log('extracted:', extracted)
-
-    setMicState('idle')
-    showConfirmModal(transcript, extracted)
-
+    await handleTextInput(transcript)
   } catch (err) {
-    console.error('sendToBackend error:', err)
+    console.error(err)
     setMicState('idle')
-    alert('Something went wrong — check the console for details.')
+    alert('Something went wrong during transcription.')
   }
 }
 
-// modal
-const overlay = document.getElementById('overlay')
-const btnCancel = document.getElementById('btn-cancel')
-const btnSave = document.getElementById('btn-save')
-const modalHeard = document.getElementById('modal-heard')
+async function handleTextInput(text) {
+  addBubble(text, 'user')
 
-function showConfirmModal(transcript, extracted) {
-  micLabel.textContent = 'tap to speak'
-  modalHeard.textContent = `"${transcript}"`
+  // add to agent message history
+  agentMessages.push({ role: 'user', content: text })
+
+  setMicState('thinking')
+  awaitingReply = false
+
+  try {
+    const res = await fetch(`${API_BASE}/agent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: agentMessages })
+    })
+    const result = await res.json()
+
+    // update conversation history from agent response
+    if (result.messages) {
+      agentMessages = result.messages.filter(m => m.role !== 'system')
+    }
+
+    if (result.type === 'question') {
+      // agent needs clarification
+      awaitingReply = true
+      addBubble(result.text, 'agent')
+      setMicState('idle')
+
+    } else if (result.type === 'reminder') {
+      // agent has all info — show confirm modal
+      awaitingReply = false
+      setMicState('idle')
+      showConfirmModal(result.data)
+
+    } else if (result.type === 'error') {
+      awaitingReply = false
+      addBubble(result.text, 'agent')
+      setMicState('idle')
+    }
+
+  } catch (err) {
+    console.error(err)
+    awaitingReply = false
+    setMicState('idle')
+    alert('Something went wrong — check the console.')
+  }
+}
+
+// ─── Confirm Modal ────────────────────────────────────────────────────────────
+function showConfirmModal(extracted) {
   document.getElementById('field-title').value = extracted.title || ''
   document.getElementById('field-location').value = extracted.location || ''
   document.getElementById('field-type').value = extracted.type || 'casual'
@@ -197,14 +250,15 @@ function showConfirmModal(transcript, extracted) {
   overlay.classList.add('show')
 }
 
-btnCancel.addEventListener('click', () => overlay.classList.remove('show'))
+btnCancel.addEventListener('click', () => {
+  overlay.classList.remove('show')
+  resetConversation()
+})
 
 btnSave.addEventListener('click', async () => {
   const title = document.getElementById('field-title').value
-  if (!title.trim()) {
-    alert('Title cannot be empty.')
-    return
-  }
+  if (!title.trim()) { alert('Title cannot be empty.'); return }
+
   const reminder = {
     title,
     datetime: document.getElementById('field-datetime').value || null,
@@ -213,6 +267,7 @@ btnSave.addEventListener('click', async () => {
     repeat: document.getElementById('field-repeat').value,
     participants: []
   }
+
   try {
     const res = await fetch(`${API_BASE}/reminders`, {
       method: 'POST',
@@ -222,6 +277,7 @@ btnSave.addEventListener('click', async () => {
     const data = await res.json()
     if (data.status === 'saved') {
       overlay.classList.remove('show')
+      resetConversation()
       loadReminders()
     }
   } catch (err) {
@@ -229,6 +285,14 @@ btnSave.addEventListener('click', async () => {
   }
 })
 
+function resetConversation() {
+  agentMessages = []
+  awaitingReply = false
+  clearBubbles()
+  setMicState('idle')
+}
+
+// ─── Reminders ────────────────────────────────────────────────────────────────
 async function loadReminders() {
   try {
     const res = await fetch(`${API_BASE}/reminders`)
@@ -246,10 +310,7 @@ function renderReminders(reminders) {
     return
   }
   const typeColors = {
-    meeting: '#0081a7',
-    medication: '#0a5c44',
-    task: '#c4501e',
-    casual: '#aaa'
+    meeting: '#0081a7', medication: '#0a5c44', task: '#c4501e', casual: '#aaa'
   }
   area.innerHTML = ''
   reminders.forEach(r => {
