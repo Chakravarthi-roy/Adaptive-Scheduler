@@ -42,7 +42,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_reminders",
-            "description": "Get all existing reminders to understand the user's current schedule. Use this to resolve relative references like 'after my exam', 'before my meeting', etc.",
+            "description": "Get all existing reminders to understand the user's current schedule. Use this to resolve relative references like 'after my exam', 'before my meeting', and also to find reminders the user wants to delete.",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -71,21 +71,21 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "create_reminder",
-            "description": "Create a reminder once you have all the necessary information. Call this when you are confident about the reminder details.",
+            "description": "Create a reminder once you have all the necessary information.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "title": {
                         "type": "string",
-                        "description": "Short, clean title for the reminder. Strip filler words."
+                        "description": "Short, clean title. Strip filler words like ra, yaar, na, bro, da."
                     },
                     "datetime": {
                         "type": "string",
-                        "description": "ISO format datetime YYYY-MM-DDTHH:MM:00 or null if not applicable"
+                        "description": "ISO format datetime YYYY-MM-DDTHH:MM:00 or empty string if not applicable"
                     },
                     "location": {
-                        "type": ["string", "null"],
-                        "description": "Location or null"
+                        "type": "string",
+                        "description": "Location or empty string if none"
                     },
                     "type": {
                         "type": "string",
@@ -100,33 +100,64 @@ TOOLS = [
                     "participants": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of participant names, empty if none"
+                        "description": "List of participant names, always an empty array [] if none"
                     }
                 },
-                "required": ["title", "type", "repeat", "participants"]
+                "required": ["title", "type", "repeat", "location", "participants"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_reminder",
+            "description": "Delete one or more reminders by their IDs. Always call get_reminders first to find the correct reminder ID(s). If multiple reminders match, ask the user to clarify which one.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of reminder IDs to delete"
+                    },
+                    "confirmation": {
+                        "type": "string",
+                        "description": "A short human-readable message confirming what was deleted e.g. 'Deleted your 5pm meeting'"
+                    }
+                },
+                "required": ["ids", "confirmation"]
             }
         }
     }
 ]
 
-SYSTEM_PROMPT = """You are a smart reminder assistant that helps users create reminders from voice or text input.
+SYSTEM_PROMPT = """You are a smart reminder assistant that helps users create and manage reminders via voice or text.
 
-You have access to three tools:
-1. get_reminders — to see the user's existing schedule
-2. ask_user — to ask ONE clarifying question when needed
-3. create_reminder — to create the reminder once you have all details
+You have access to four tools:
+1. get_reminders — see the user's existing schedule
+2. ask_user — ask ONE clarifying question when needed
+3. create_reminder — create a new reminder
+4. delete_reminder — delete one or more existing reminders
 
-Rules:
-- Always call get_reminders first to understand the user's existing schedule
-- If the user says "after my exam/meeting/task", look at existing reminders to calculate the time
-- If you need duration or any unclear detail, use ask_user to ask ONE focused question
+Rules for ALL requests:
+- Always call get_reminders first to understand the user's schedule
+- Be conversational and friendly
 - Strip filler words like ra, yaar, na, bro, da from titles
+
+Rules for CREATING reminders:
+- If the user says "after my exam/meeting/task", look at existing reminders to calculate the time
+- If you need duration or unclear detail, use ask_user with ONE focused question
 - "evening" = 18:00, "morning" = 08:00, "night" = 21:00, "in a bit" = 10 mins from now
 - "next sunday" = sunday of next week
-- Keep titles short and clean
-- Be conversational and friendly in questions
-- Once you have all info, call create_reminder immediately
-- Never ask more than necessary — infer what you can"""
+- location must always be a string, use empty string "" if none
+- participants must always be an array, use empty array [] if none
+- datetime must always be a string, use empty string "" if no time
+
+Rules for DELETING reminders:
+- Always call get_reminders first to find the reminder ID
+- If the user's description matches exactly one reminder, delete it directly
+- If multiple reminders match, use ask_user to clarify which one
+- Always include a friendly confirmation message"""
 
 
 def get_reminders_tool():
@@ -147,6 +178,21 @@ def get_reminders_tool():
         db.close()
 
 
+def delete_reminders_tool(ids):
+    db = SessionLocal()
+    try:
+        deleted = 0
+        for reminder_id in ids:
+            reminder = db.query(Reminder).filter(Reminder.id == reminder_id).first()
+            if reminder:
+                db.delete(reminder)
+                deleted += 1
+        db.commit()
+        return {"deleted": deleted}
+    finally:
+        db.close()
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.api_route("/", methods=["GET", "HEAD"])
@@ -157,28 +203,20 @@ def root():
 @app.post("/transcribe")
 async def transcribe(audio: UploadFile = File(...)):
     audio_bytes = await audio.read()
-
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
-
     with open(tmp_path, "rb") as f:
         transcript = client.audio.transcriptions.create(
             model="whisper-large-v3-turbo",
             file=f
         )
-
     os.remove(tmp_path)
     return {"transcript": transcript.text}
 
 
 @app.post("/agent")
 async def agent(data: dict):
-    """
-    Main agent endpoint. Accepts conversation history and returns either:
-    - { "type": "question", "text": "...", "messages": [...] }
-    - { "type": "reminder", "data": {...}, "messages": [...] }
-    """
     messages = data.get("messages", [])
     now = datetime.now(IST).strftime("%Y-%m-%d %H:%M")
 
@@ -239,6 +277,14 @@ async def agent(data: dict):
                 return {
                     "type": "reminder",
                     "data": fn_args,
+                    "messages": full_messages
+                }
+
+            elif fn_name == "delete_reminder":
+                delete_reminders_tool(fn_args["ids"])
+                return {
+                    "type": "deleted",
+                    "text": fn_args["confirmation"],
                     "messages": full_messages
                 }
 
@@ -333,9 +379,7 @@ def send_notification(title, body, persistent=False):
         sub = db.query(PushSubscription).first()
         if not sub:
             return {"status": "no subscription found"}
-
         subscription = json.loads(sub.subscription_json)
-
         webpush(
             subscription_info=subscription,
             data=json.dumps({

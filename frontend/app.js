@@ -44,8 +44,8 @@ document.getElementById('today-date').textContent = new Date().toLocaleDateStrin
 let mediaRecorder = null
 let audioChunks = []
 let recording = false
-let agentMessages = []       // conversation history sent to /agent
-let awaitingReply = false    // true when agent asked a question
+let agentMessages = []
+let awaitingReply = false
 
 // ─── Elements ─────────────────────────────────────────────────────────────────
 const micBtn = document.getElementById('mic-btn')
@@ -164,22 +164,18 @@ async function handleAudioInput(audioBlob) {
     alert('Recording too short — please speak for at least 2 seconds.')
     return
   }
-
   setMicState('processing')
-
   try {
     const formData = new FormData()
     formData.append('audio', audioBlob, 'recording.webm')
     const res = await fetch(`${API_BASE}/transcribe`, { method: 'POST', body: formData })
     const data = await res.json()
     const transcript = data.transcript?.trim()
-
     if (!transcript) {
       setMicState('idle')
       alert('Could not hear anything. Try speaking louder.')
       return
     }
-
     await handleTextInput(transcript)
   } catch (err) {
     console.error(err)
@@ -190,10 +186,7 @@ async function handleAudioInput(audioBlob) {
 
 async function handleTextInput(text) {
   addBubble(text, 'user')
-
-  // add to agent message history
   agentMessages.push({ role: 'user', content: text })
-
   setMicState('thinking')
   awaitingReply = false
 
@@ -205,22 +198,28 @@ async function handleTextInput(text) {
     })
     const result = await res.json()
 
-    // update conversation history from agent response
     if (result.messages) {
       agentMessages = result.messages.filter(m => m.role !== 'system')
     }
 
     if (result.type === 'question') {
-      // agent needs clarification
       awaitingReply = true
       addBubble(result.text, 'agent')
       setMicState('idle')
 
     } else if (result.type === 'reminder') {
-      // agent has all info — show confirm modal
       awaitingReply = false
       setMicState('idle')
       showConfirmModal(result.data)
+
+    } else if (result.type === 'deleted') {
+      // reminder deleted — show confirmation bubble and refresh list
+      awaitingReply = false
+      addBubble(result.text, 'agent')
+      setMicState('idle')
+      loadReminders()
+      // clear conversation after a short delay
+      setTimeout(() => resetConversation(), 2000)
 
     } else if (result.type === 'error') {
       awaitingReply = false
@@ -259,6 +258,10 @@ btnSave.addEventListener('click', async () => {
   const title = document.getElementById('field-title').value
   if (!title.trim()) { alert('Title cannot be empty.'); return }
 
+  // disable button to prevent double click
+  btnSave.disabled = true
+  btnSave.textContent = 'Saving...'
+
   const reminder = {
     title,
     datetime: document.getElementById('field-datetime').value || null,
@@ -282,6 +285,9 @@ btnSave.addEventListener('click', async () => {
     }
   } catch (err) {
     alert('Could not save. Is the backend running?')
+  } finally {
+    btnSave.disabled = false
+    btnSave.textContent = 'Save reminder'
   }
 })
 
