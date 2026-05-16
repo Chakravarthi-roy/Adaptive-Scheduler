@@ -84,7 +84,7 @@ TOOLS = [
                         "description": "ISO format datetime YYYY-MM-DDTHH:MM:00 or null if not applicable"
                     },
                     "location": {
-                        "type": "string",
+                        "type": ["string", "null"],
                         "description": "Location or null"
                     },
                     "type": {
@@ -100,10 +100,10 @@ TOOLS = [
                     "participants": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of participant names if any"
+                        "description": "List of participant names, empty if none"
                     }
                 },
-                "required": ["title", "type", "repeat"]
+                "required": ["title", "type", "repeat", "participants"]
             }
         }
     }
