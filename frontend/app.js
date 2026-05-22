@@ -1,5 +1,5 @@
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com' // 👈 your backend URL
+const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
 // const API_BASE = 'http://localhost:8000'
 // ─────────────────────────────────────────────────────────────────────────────
 
