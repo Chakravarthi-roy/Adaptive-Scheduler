@@ -1,0 +1,38 @@
+services:
+  # Backend API
+  - type: web
+    name: adaptive-scheduler-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_EMAIL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+
+  # Background Scheduler
+  - type: worker
+    name: adaptive-scheduler-worker
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scheduler.py
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_EMAIL
+        sync: false
