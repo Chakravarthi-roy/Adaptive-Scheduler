@@ -232,7 +232,7 @@ async def agent(data: dict):
     try:
         for _ in range(10):
             response = client.chat.completions.create(
-                model="groq-tool-use-preview-0428",
+                model="mixtral-8x7b-32768",
                 messages=full_messages,
                 tools=TOOLS,
                 tool_choice="auto",
