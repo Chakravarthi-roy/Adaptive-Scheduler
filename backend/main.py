@@ -319,7 +319,7 @@ def save_reminder(data: dict):
 def get_reminders():
     db = SessionLocal()
     try:
-        reminders = db.query(Reminder).filter(Reminder.done == False).order_by(Reminder.datetime).all()
+        reminders = db.query(Reminder).order_by(Reminder.datetime).all()
         return [
             {
                 "id": r.id,

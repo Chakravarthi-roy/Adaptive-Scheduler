@@ -67,10 +67,13 @@ self.addEventListener('notificationclick', e => {
   const reminder_id = e.notification.data?.reminder_id
   e.notification.close()
 
+  // Backend API URL - update this to match your backend
+  const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
+
   if (action === 'snooze' && reminder_id) {
     // tell backend to snooze this reminder by 10 mins
     e.waitUntil(
-      fetch(`${self.location.origin.replace('frontend', 'api')}/reminders/${reminder_id}/snooze`, {
+      fetch(`${API_BASE}/reminders/${reminder_id}/snooze`, {
         method: 'POST'
       }).catch(err => console.log('snooze failed:', err))
     )
@@ -81,7 +84,7 @@ self.addEventListener('notificationclick', e => {
   if (action && action !== 'snooze') {
     if (reminder_id) {
       e.waitUntil(
-        fetch(`${self.location.origin.replace('frontend', 'api')}/reminders/${reminder_id}/done`, {
+        fetch(`${API_BASE}/reminders/${reminder_id}/done`, {
           method: 'PATCH'
         }).catch(err => console.log('mark done failed:', err))
       )
