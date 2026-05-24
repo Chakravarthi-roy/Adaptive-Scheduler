@@ -1,9 +1,10 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 from database import SessionLocal, Reminder, PushSubscription, init_db
 from pywebpush import webpush, WebPushException
+from scheduler import build_notification, PRE_ALERT_MINUTES
 import groq
 import json
 import uuid
@@ -422,5 +423,81 @@ def send_notification(title, body, persistent=False, action=None, action_label=N
     except WebPushException as ex:
         print("push failed:", ex)
         return {"status": "failed", "error": str(ex)}
+    finally:
+        db.close()
+
+@app.get("/cron/check-reminders")
+def cron_check_reminders():
+    """Endpoint for external cron service to trigger reminder checks"""
+    db = SessionLocal()
+    try:
+        now = datetime.now(IST).replace(tzinfo=None)
+        window_start = now - timedelta(seconds=30)
+        window_end = now + timedelta(seconds=30)
+
+        # Check pre-alerts
+        for reminder_type, minutes in PRE_ALERT_MINUTES.items():
+            if minutes == 0:
+                continue
+            pre_alert_window_start = window_start + timedelta(minutes=minutes)
+            pre_alert_window_end = window_end + timedelta(minutes=minutes)
+
+            due_pre = db.query(Reminder).filter(
+                Reminder.done == False,
+                Reminder.notified == False,
+                Reminder.pre_alerted == False,
+                Reminder.type == reminder_type,
+                Reminder.datetime >= pre_alert_window_start,
+                Reminder.datetime <= pre_alert_window_end
+            ).all()
+
+            for reminder in due_pre:
+                notif = build_notification(reminder, is_pre_alert=True)
+                if notif:
+                    send_notification(
+                        notif["title"],
+                        notif["body"],
+                        notif["persistent"],
+                        action=notif["action"],
+                        action_label=notif["action_label"],
+                        reminder_id=reminder.id
+                    )
+                    reminder.pre_alerted = True
+
+        # Check on-time notifications
+        due = db.query(Reminder).filter(
+            Reminder.done == False,
+            Reminder.notified == False,
+            Reminder.datetime >= window_start,
+            Reminder.datetime <= window_end
+        ).all()
+
+        for reminder in due:
+            notif = build_notification(reminder, is_pre_alert=False)
+            send_notification(
+                notif["title"],
+                notif["body"],
+                notif["persistent"],
+                action=notif["action"],
+                action_label=notif["action_label"],
+                reminder_id=reminder.id
+            )
+            reminder.notified = True
+
+            # Handle recurring
+            if reminder.repeat == "daily":
+                reminder.datetime = reminder.datetime + timedelta(days=1)
+                reminder.notified = False
+                reminder.pre_alerted = False
+            elif reminder.repeat == "weekly":
+                reminder.datetime = reminder.datetime + timedelta(weeks=1)
+                reminder.notified = False
+                reminder.pre_alerted = False
+
+        db.commit()
+        return {"status": "checked", "time": now.strftime("%H:%M:%S")}
+    except Exception as e:
+        print(f"Cron error: {e}")
+        return {"status": "error", "message": str(e)}
     finally:
         db.close()

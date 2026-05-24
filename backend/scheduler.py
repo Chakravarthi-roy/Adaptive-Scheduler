@@ -1,6 +1,3 @@
-import schedule
-import time
-import json
 import pytz
 from database import SessionLocal, Reminder
 from datetime import datetime, timedelta
@@ -199,9 +196,9 @@ def check_reminders():
         db.close()
 
 
-schedule.every(1).minutes.do(check_reminders)
+# schedule.every(1).minutes.do(check_reminders)
 
-print("scheduler running...")
-while True:
-    schedule.run_pending()
-    time.sleep(10)
+# print("scheduler running...")
+# while True:
+#     schedule.run_pending()
+#     time.sleep(10)

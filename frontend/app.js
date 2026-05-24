@@ -369,6 +369,7 @@ async function markDone(id) {
 
 // ─── Sidebar Navigation ───────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  loadReminders()
   const navItems = document.querySelectorAll('.nav-item')
   navItems.forEach(item => {
     item.addEventListener('click', (e) => {
@@ -393,8 +394,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentView = 'settings'
         document.querySelector('.page-title').textContent = 'Settings'
       }
-      
-      loadReminders()
     })
   })
 })
