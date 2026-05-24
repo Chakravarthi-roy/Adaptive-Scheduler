@@ -225,71 +225,66 @@ async def agent(data: dict):
     messages = data.get("messages", [])
     now = datetime.now(IST).strftime("%Y-%m-%d %H:%M")
 
-    full_messages = [
-        {"role": "system", "content": f"{SYSTEM_PROMPT}\n\nCurrent date and time (IST): {now}"}
-    ] + messages
+    system = f"""{SYSTEM_PROMPT}
+
+Current date and time (IST): {now}
+
+RESPOND ONLY WITH JSON in this format:
+{{"action": "get_reminders"}} - to see existing reminders
+{{"action": "ask_user", "question": "Your question here"}} - to ask user for info
+{{"action": "create_reminder", "title": "...", "datetime": "...", "location": "...", "type": "...", "repeat": "...", "participants": []}}
+{{"action": "delete_reminder", "ids": [...], "confirmation": "..."}}
+
+Always respond with ONLY valid JSON, no other text."""
+
+    full_messages = [{"role": "user", "content": system}] + messages
 
     try:
         for _ in range(10):
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=full_messages,
-                tools=TOOLS,
-                tool_choice="auto",
                 temperature=0
             )
 
-            message = response.choices[0].message
+            text = response.choices[0].message.content.strip()
+            
+            # Parse JSON response
+            try:
+                action_data = json.loads(text)
+            except json.JSONDecodeError:
+                print(f"Failed to parse JSON: {text}")
+                return {"type": "error", "text": "Sorry, I had trouble understanding that. Please try again!"}
 
-            if not message.tool_calls:
-                return {"type": "question", "text": message.content, "messages": full_messages}
+            action = action_data.get("action")
 
-            full_messages.append({
-                "role": "assistant",
-                "content": message.content,
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments
-                        }
-                    }
-                    for tc in message.tool_calls
-                ]
-            })
+            if action == "get_reminders":
+                result = get_reminders_tool()
+                full_messages.append({"role": "assistant", "content": text})
+                full_messages.append({"role": "user", "content": f"Here are existing reminders: {json.dumps(result)}"})
 
-            for tool_call in message.tool_calls:
-                fn_name = tool_call.function.name
-                fn_args = json.loads(tool_call.function.arguments)
+            elif action == "ask_user":
+                return {
+                    "type": "question",
+                    "text": action_data.get("question", "Can you provide more details?"),
+                    "messages": full_messages
+                }
 
-                if fn_name == "get_reminders":
-                    result = get_reminders_tool()
-                    full_messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": json.dumps(result)
-                    })
-                elif fn_name == "ask_user":
-                    return {
-                        "type": "question",
-                        "text": fn_args["question"],
-                        "messages": full_messages
-                    }
-                elif fn_name == "create_reminder":
-                    return {
-                        "type": "reminder",
-                        "data": fn_args,
-                        "messages": full_messages
-                    }
-                elif fn_name == "delete_reminder":
-                    delete_reminders_tool(fn_args["ids"])
-                    return {
-                        "type": "deleted",
-                        "text": fn_args["confirmation"],
-                        "messages": full_messages
-                    }
+            elif action == "create_reminder":
+                return {
+                    "type": "reminder",
+                    "data": action_data,
+                    "messages": full_messages
+                }
+
+            elif action == "delete_reminder":
+                delete_reminders_tool(action_data.get("ids", []))
+                return {
+                    "type": "deleted",
+                    "text": action_data.get("confirmation", "Reminder deleted"),
+                    "messages": full_messages
+                }
+
     except Exception as e:
         print(f"Agent error: {type(e).__name__}: {str(e)}")
         import traceback
@@ -297,7 +292,6 @@ async def agent(data: dict):
         return {"type": "error", "text": "Sorry, I had trouble understanding that. Please try again!"}
 
     return {"type": "error", "text": "Something went wrong. Please try again."}
-
 
 @app.post("/reminders")
 def save_reminder(data: dict):
