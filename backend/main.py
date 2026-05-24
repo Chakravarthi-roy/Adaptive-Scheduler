@@ -232,7 +232,7 @@ async def agent(data: dict):
     try:
         for _ in range(10):
             response = client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+                model="llama-3.3-70b-versatile",
                 messages=full_messages,
                 tools=TOOLS,
                 tool_choice="auto",
