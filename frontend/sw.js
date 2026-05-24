@@ -17,6 +17,7 @@ self.addEventListener('push', e => {
   let action = null
   let action_label = null
   let reminder_id = null
+  let sound = true
 
   try {
     const data = e.data.json()
@@ -26,6 +27,7 @@ self.addEventListener('push', e => {
     action = data.action || null
     action_label = data.action_label || null
     reminder_id = data.reminder_id || null
+    sound = data.sound !== false  // default to true
   } catch {
     title = '🔔 Reminder'
     body = e.data.text()
@@ -50,6 +52,11 @@ self.addEventListener('push', e => {
     }
   }
 
+  // add sound to notification
+  if (sound) {
+    options.sound = 'default'
+  }
+
   e.waitUntil(
     self.registration.showNotification(title, options)
   )
@@ -70,8 +77,8 @@ self.addEventListener('notificationclick', e => {
     return
   }
 
-  if (action === 'taken' || action === 'on_it' || action === 'done' || action === 'on_way') {
-    // mark reminder as done when user taps action button
+  // handle any dynamic action — if it's not snooze, it's a "mark done" action
+  if (action && action !== 'snooze') {
     if (reminder_id) {
       e.waitUntil(
         fetch(`${self.location.origin.replace('frontend', 'api')}/reminders/${reminder_id}/done`, {

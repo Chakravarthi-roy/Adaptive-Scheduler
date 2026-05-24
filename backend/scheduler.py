@@ -16,11 +16,27 @@ PRE_ALERT_MINUTES = {
     "casual":     0   # on time, no pre-alert
 }
 
+# ─── Button labels by type ────────────────────────────────────────────────────
+ACTION_LABELS = {
+    "medication": {"action": "took_it", "label": "Took it 💊"},
+    "meeting": {"action": "started", "label": "Started 📅"},
+    "task": {"action": "doing", "label": "Doing it ✅"},
+    "casual": {"action": "done", "label": "Done ✓"}
+}
+
 # ─── Notification content by type ────────────────────────────────────────────
 def build_notification(reminder, is_pre_alert=False):
     title = reminder.title
     time_str = reminder.datetime.strftime("%I:%M %p")
     location_str = f" · {reminder.location}" if reminder.location else ""
+    
+    # Get action and label for this type
+    action_config = ACTION_LABELS.get(reminder.type, ACTION_LABELS["casual"])
+    action = action_config["action"]
+    action_label = action_config["label"]
+    
+    # Determine persistence based on type
+    persistent = reminder.type == "medication"
 
     if is_pre_alert:
         minutes = PRE_ALERT_MINUTES[reminder.type]
@@ -28,67 +44,77 @@ def build_notification(reminder, is_pre_alert=False):
             return {
                 "title": f"💊 {title} in {minutes} min",
                 "body": f"Get your medication ready · {time_str}",
-                "action": "taken",
-                "action_label": "Taken 💊",
-                "persistent": True
+                "action": action,
+                "action_label": action_label,
+                "persistent": persistent,
+                "sound": True
             }
         elif reminder.type == "meeting":
             return {
                 "title": f"📅 {title} in {minutes} mins",
                 "body": f"Meeting coming up at {time_str}{location_str}",
-                "action": "on_way",
-                "action_label": "On my way 🚗",
-                "persistent": False
+                "action": action,
+                "action_label": action_label,
+                "persistent": persistent,
+                "sound": True
             }
         elif reminder.type == "task":
             return {
                 "title": f"📝 {title} in {minutes} mins",
                 "body": f"Starting at {time_str}{location_str}",
-                "action": "on_it",
-                "action_label": "On it ✅",
-                "persistent": False
+                "action": action,
+                "action_label": action_label,
+                "persistent": persistent,
+                "sound": True
             }
+        else:  # casual — no pre-alert
+            return None
     else:
         # on-time notification
         if reminder.type == "medication":
             return {
                 "title": f"💊 {title}",
                 "body": f"Time to take your medication · {time_str}",
-                "action": "taken",
-                "action_label": "Taken 💊",
-                "persistent": True
+                "action": action,
+                "action_label": action_label,
+                "persistent": persistent,
+                "sound": True
             }
         elif reminder.type == "meeting":
             return {
                 "title": f"📅 {title}",
                 "body": f"Your meeting is now · {time_str}{location_str}",
-                "action": "on_way",
-                "action_label": "On my way 🚗",
-                "persistent": False
+                "action": action,
+                "action_label": action_label,
+                "persistent": persistent,
+                "sound": True
             }
         elif reminder.type == "task":
             return {
                 "title": f"📝 {title}",
                 "body": f"Time to start · {time_str}{location_str}",
-                "action": "on_it",
-                "action_label": "On it ✅",
-                "persistent": False
+                "action": action,
+                "action_label": action_label,
+                "persistent": persistent,
+                "sound": True
             }
         elif reminder.type == "casual":
             return {
                 "title": f"🔔 {title}",
                 "body": time_str,
-                "action": "done",
-                "action_label": "Done ✓",
-                "persistent": False
+                "action": action,
+                "action_label": action_label,
+                "persistent": persistent,
+                "sound": True
             }
 
     return {
         "title": f"🔔 {title}",
         "body": time_str,
-        "action": "done",
-        "action_label": "Done ✓",
-        "persistent": False
+        "action": action,
+        "action_label": action_label,
+        "persistent": persistent,
+        "sound": True
     }
 
 

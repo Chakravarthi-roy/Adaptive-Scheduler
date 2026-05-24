@@ -46,6 +46,7 @@ let audioChunks = []
 let recording = false
 let agentMessages = []
 let awaitingReply = false
+let currentView = 'reminders'  // 'reminders', 'recurring', 'done'
 
 // ─── Elements ─────────────────────────────────────────────────────────────────
 const micBtn = document.getElementById('mic-btn')
@@ -218,8 +219,8 @@ async function handleTextInput(text) {
       addBubble(result.text, 'agent')
       setMicState('idle')
       loadReminders()
-      // clear conversation after a short delay
-      setTimeout(() => resetConversation(), 2000)
+      // clear conversation immediately
+      resetConversation()
 
     } else if (result.type === 'error') {
       awaitingReply = false
@@ -302,19 +303,36 @@ function resetConversation() {
 async function loadReminders() {
   try {
     const res = await fetch(`${API_BASE}/reminders`)
-    const reminders = await res.json()
-    renderReminders(reminders)
+    const allReminders = await res.json()
+    renderReminders(allReminders)
   } catch (err) {
     console.error('could not load reminders:', err)
   }
 }
 
-function renderReminders(reminders) {
+function filterReminders(reminders) {
+  if (currentView === 'reminders') {
+    // Active reminders: not done
+    return reminders.filter(r => !r.done)
+  } else if (currentView === 'recurring') {
+    // Recurring reminders: repeat != 'none' and not done
+    return reminders.filter(r => !r.done && r.repeat !== 'none')
+  } else if (currentView === 'done') {
+    // Completed reminders: done = true
+    return reminders.filter(r => r.done)
+  }
+  return reminders
+}
+
+function renderReminders(allReminders) {
+  const reminders = filterReminders(allReminders)
   const area = document.getElementById('reminders-area')
+  
   if (reminders.length === 0) {
     area.innerHTML = '<div class="empty-state">No reminders yet. Tap the mic and speak.</div>'
     return
   }
+  
   const typeColors = {
     meeting: '#0081a7', medication: '#0a5c44', task: '#c4501e', casual: '#aaa'
   }
@@ -348,5 +366,37 @@ async function markDone(id) {
   await fetch(`${API_BASE}/reminders/${id}/done`, { method: 'PATCH' })
   loadReminders()
 }
+
+// ─── Sidebar Navigation ───────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const navItems = document.querySelectorAll('.nav-item')
+  navItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault()
+      const view = item.textContent.toLowerCase()
+      
+      // Update active state
+      navItems.forEach(ni => ni.classList.remove('active'))
+      item.classList.add('active')
+      
+      // Update view and title
+      if (view === 'reminders') {
+        currentView = 'reminders'
+        document.querySelector('.page-title').textContent = 'Reminders'
+      } else if (view === 'recurring') {
+        currentView = 'recurring'
+        document.querySelector('.page-title').textContent = 'Recurring'
+      } else if (view === 'done') {
+        currentView = 'done'
+        document.querySelector('.page-title').textContent = 'Done'
+      } else if (view === 'settings') {
+        currentView = 'settings'
+        document.querySelector('.page-title').textContent = 'Settings'
+      }
+      
+      loadReminders()
+    })
+  })
+})
 
 loadReminders()
