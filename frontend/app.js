@@ -319,7 +319,7 @@ function filterReminders(reminders) {
     return reminders.filter(r => !r.done && r.repeat !== 'none')
   } else if (currentView === 'done') {
     // Completed reminders: done = true
-    return reminders.filter(r => r.done)
+    return reminders.filter(r => r.done === true)
   }
   return reminders
 }
