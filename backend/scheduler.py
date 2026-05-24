@@ -1,7 +1,7 @@
 import pytz
 from database import SessionLocal, Reminder
 from datetime import datetime, timedelta
-from main import send_notification
+from notification import send_notification
 
 IST = pytz.timezone('Asia/Kolkata')
 

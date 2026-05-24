@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from database import SessionLocal, Reminder, PushSubscription, init_db
 from pywebpush import webpush, WebPushException
-from scheduler import build_notification, PRE_ALERT_MINUTES
+from notification import build_notification, send_notification, PRE_ALERT_MINUTES
 import groq
 import json
 import uuid
@@ -393,38 +393,38 @@ def send_test():
     )
 
 
-def send_notification(title, body, persistent=False, action=None, action_label=None, reminder_id=None):
-    db = SessionLocal()
-    try:
-        sub = db.query(PushSubscription).first()
-        if not sub:
-            return {"status": "no subscription found"}
-        subscription = json.loads(sub.subscription_json)
+# def send_notification(title, body, persistent=False, action=None, action_label=None, reminder_id=None):
+#     db = SessionLocal()
+#     try:
+#         sub = db.query(PushSubscription).first()
+#         if not sub:
+#             return {"status": "no subscription found"}
+#         subscription = json.loads(sub.subscription_json)
 
-        payload = {
-            "title": title,
-            "body": body,
-            "persistent": persistent,
-            "reminder_id": reminder_id
-        }
+#         payload = {
+#             "title": title,
+#             "body": body,
+#             "persistent": persistent,
+#             "reminder_id": reminder_id
+#         }
 
-        # add action button if provided
-        if action and action_label:
-            payload["action"] = action
-            payload["action_label"] = action_label
+#         # add action button if provided
+#         if action and action_label:
+#             payload["action"] = action
+#             payload["action_label"] = action_label
 
-        webpush(
-            subscription_info=subscription,
-            data=json.dumps(payload),
-            vapid_private_key=VAPID_PRIVATE_KEY,
-            vapid_claims={"sub": VAPID_EMAIL}
-        )
-        return {"status": "sent"}
-    except WebPushException as ex:
-        print("push failed:", ex)
-        return {"status": "failed", "error": str(ex)}
-    finally:
-        db.close()
+#         webpush(
+#             subscription_info=subscription,
+#             data=json.dumps(payload),
+#             vapid_private_key=VAPID_PRIVATE_KEY,
+#             vapid_claims={"sub": VAPID_EMAIL}
+#         )
+#         return {"status": "sent"}
+#     except WebPushException as ex:
+#         print("push failed:", ex)
+#         return {"status": "failed", "error": str(ex)}
+#     finally:
+#         db.close()
 
 @app.get("/cron/check-reminders")
 def cron_check_reminders():
