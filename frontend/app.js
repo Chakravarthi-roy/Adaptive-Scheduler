@@ -394,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentView = 'settings'
         document.querySelector('.page-title').textContent = 'Settings'
       }
+      loadReminders()
     })
   })
 })
