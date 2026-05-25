@@ -1,7 +1,6 @@
-// ─── CONFIG ──────────────────────────────────────────────────────────────────
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
 const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
 // const API_BASE = 'http://localhost:8000'
-// ─────────────────────────────────────────────────────────────────────────────
 
 const VAPID_PUBLIC_KEY = 'BLdUTJ82_k03z93xAJadQ2U58tp-V5ICr_g4Hf_20L6uJ0C9XDnLHxgux-UOJ-QjLMFzoTaP4oTwx5FktGWeSyY'
 
@@ -35,10 +34,19 @@ async function initPush() {
 
 initPush()
 
-// ─── Date ─────────────────────────────────────────────────────────────────────
+// ─── Date & Live Clock ───────────────────────────────────────────────────────
 document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-US', {
-  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
 })
+
+function updateClock() {
+  const el = document.getElementById('today-time')
+  if (el) el.textContent = new Date().toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+  })
+}
+updateClock()
+setInterval(updateClock, 1000)
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let mediaRecorder = null
@@ -46,20 +54,29 @@ let audioChunks = []
 let recording = false
 let agentMessages = []
 let awaitingReply = false
-let currentView = 'reminders'  // 'reminders', 'recurring', 'done'
+let currentView = 'reminders'
 
 // ─── Elements ─────────────────────────────────────────────────────────────────
-const micBtn = document.getElementById('mic-btn')
-const micLabel = document.getElementById('mic-label')
-const micStatus = document.getElementById('mic-status')
-const typeBtn = document.getElementById('type-btn')
-const typeArea = document.getElementById('type-area')
-const typeInput = document.getElementById('type-input')
-const typeSend = document.getElementById('type-send')
+const micBtn     = document.getElementById('mic-btn')
+const typeBtn    = document.getElementById('type-btn')
+const typeArea   = document.getElementById('type-area')
+const typeInput  = document.getElementById('type-input')
+const typeSend   = document.getElementById('type-send')
 const chatBubbles = document.getElementById('chat-bubbles')
-const overlay = document.getElementById('overlay')
-const btnCancel = document.getElementById('btn-cancel')
-const btnSave = document.getElementById('btn-save')
+const overlay    = document.getElementById('overlay')
+const btnCancel  = document.getElementById('btn-cancel')
+const btnCancel2 = document.getElementById('btn-cancel-2')
+const btnSave    = document.getElementById('btn-save')
+const micToast   = document.getElementById('mic-toast')
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+let toastTimer = null
+function showToast(msg) {
+  micToast.textContent = msg
+  micToast.classList.add('show')
+  clearTimeout(toastTimer)
+  if (msg) toastTimer = setTimeout(() => micToast.classList.remove('show'), 3000)
+}
 
 // ─── Mic State ────────────────────────────────────────────────────────────────
 function setMicState(state) {
@@ -67,23 +84,19 @@ function setMicState(state) {
   typeBtn.style.display = awaitingReply ? 'flex' : 'none'
   switch (state) {
     case 'idle':
-      micLabel.textContent = awaitingReply ? 'tap to reply' : 'tap to speak'
-      micStatus.textContent = ''
+      showToast(awaitingReply ? '💬 tap mic to reply, or type below' : '')
       break
     case 'recording':
       micBtn.classList.add('recording')
-      micLabel.textContent = 'recording... tap to stop'
-      micStatus.textContent = '🔴 mic is on'
+      showToast('🔴 Recording… tap again to stop')
       break
     case 'processing':
       micBtn.classList.add('processing')
-      micLabel.textContent = 'transcribing...'
-      micStatus.textContent = '⏳ sending to Whisper'
+      showToast('⏳ Transcribing…')
       break
     case 'thinking':
       micBtn.classList.add('processing')
-      micLabel.textContent = 'thinking...'
-      micStatus.textContent = '🧠 agent is working'
+      showToast('🧠 Thinking…')
       break
   }
 }
@@ -100,17 +113,12 @@ function addBubble(text, role) {
   chatBubbles.scrollTop = chatBubbles.scrollHeight
 }
 
-function clearBubbles() {
-  chatBubbles.innerHTML = ''
-}
+function clearBubbles() { chatBubbles.innerHTML = '' }
 
 // ─── Recording ────────────────────────────────────────────────────────────────
 micBtn.addEventListener('click', async () => {
-  if (!recording) {
-    await startRecording()
-  } else {
-    stopRecording()
-  }
+  if (!recording) await startRecording()
+  else stopRecording()
 })
 
 async function startRecording() {
@@ -142,13 +150,11 @@ function stopRecording() {
 // ─── Type Button ──────────────────────────────────────────────────────────────
 typeBtn.addEventListener('click', () => {
   typeArea.classList.toggle('show')
-  typeInput.focus()
+  if (typeArea.classList.contains('show')) typeInput.focus()
 })
 
 typeSend.addEventListener('click', () => sendTypedReply())
-typeInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendTypedReply()
-})
+typeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendTypedReply() })
 
 function sendTypedReply() {
   const text = typeInput.value.trim()
@@ -214,13 +220,11 @@ async function handleTextInput(text) {
       showConfirmModal(result.data)
 
     } else if (result.type === 'deleted') {
-      // reminder deleted — show confirmation bubble and refresh list
       awaitingReply = false
       addBubble(result.text, 'agent')
       setMicState('idle')
       loadReminders()
-      // clear conversation immediately
-      resetConversation()
+      setTimeout(resetConversation, 1800)
 
     } else if (result.type === 'error') {
       awaitingReply = false
@@ -238,37 +242,36 @@ async function handleTextInput(text) {
 
 // ─── Confirm Modal ────────────────────────────────────────────────────────────
 function showConfirmModal(extracted) {
-  document.getElementById('field-title').value = extracted.title || ''
+  document.getElementById('field-title').value    = extracted.title    || ''
   document.getElementById('field-location').value = extracted.location || ''
-  document.getElementById('field-type').value = extracted.type || 'casual'
-  document.getElementById('field-repeat').value = extracted.repeat || 'none'
-  if (extracted.datetime) {
-    document.getElementById('field-datetime').value = extracted.datetime.slice(0, 16)
-  } else {
-    document.getElementById('field-datetime').value = ''
-  }
+  document.getElementById('field-type').value     = extracted.type     || 'casual'
+  document.getElementById('field-repeat').value   = extracted.repeat   || 'none'
+  document.getElementById('field-datetime').value = extracted.datetime
+    ? extracted.datetime.slice(0, 16) : ''
   overlay.classList.add('show')
 }
 
-btnCancel.addEventListener('click', () => {
+function closeModal() {
   overlay.classList.remove('show')
   resetConversation()
-})
+}
+
+btnCancel.addEventListener('click', closeModal)
+btnCancel2.addEventListener('click', closeModal)
 
 btnSave.addEventListener('click', async () => {
   const title = document.getElementById('field-title').value
   if (!title.trim()) { alert('Title cannot be empty.'); return }
 
-  // disable button to prevent double click
   btnSave.disabled = true
-  btnSave.textContent = 'Saving...'
+  btnSave.textContent = 'Saving…'
 
   const reminder = {
     title,
-    datetime: document.getElementById('field-datetime').value || null,
-    location: document.getElementById('field-location').value || null,
-    type: document.getElementById('field-type').value,
-    repeat: document.getElementById('field-repeat').value,
+    datetime:     document.getElementById('field-datetime').value || null,
+    location:     document.getElementById('field-location').value || null,
+    type:         document.getElementById('field-type').value,
+    repeat:       document.getElementById('field-repeat').value,
     participants: []
   }
 
@@ -288,7 +291,7 @@ btnSave.addEventListener('click', async () => {
     alert('Could not save. Is the backend running?')
   } finally {
     btnSave.disabled = false
-    btnSave.textContent = 'Save reminder'
+    btnSave.textContent = 'Save Reminder'
   }
 })
 
@@ -300,64 +303,86 @@ function resetConversation() {
 }
 
 // ─── Reminders ────────────────────────────────────────────────────────────────
+let _allReminders = []
+
 async function loadReminders() {
+  if (currentView === 'settings') return
   try {
     const res = await fetch(`${API_BASE}/reminders`)
-    const allReminders = await res.json()
-    renderReminders(allReminders)
+    _allReminders = await res.json()
+    renderReminders(_allReminders)
   } catch (err) {
     console.error('could not load reminders:', err)
   }
 }
 
 function filterReminders(reminders) {
-  if (currentView === 'reminders') {
-    // Active reminders: not done
-    return reminders.filter(r => !r.done)
-  } else if (currentView === 'recurring') {
-    // Recurring reminders: repeat != 'none' and not done
-    return reminders.filter(r => !r.done && r.repeat !== 'none')
-  } else if (currentView === 'done') {
-    // Completed reminders: done = true
-    return reminders.filter(r => r.done === true)
-  }
+  if (currentView === 'reminders') return reminders.filter(r => !r.done)
+  if (currentView === 'recurring')  return reminders.filter(r => !r.done && r.repeat !== 'none')
+  if (currentView === 'done')       return reminders.filter(r => r.done === true)
   return reminders
+}
+
+const typeColors = {
+  meeting: '#0081a7', medication: '#0a5c44', task: '#c4501e', casual: '#a89a8a'
 }
 
 function renderReminders(allReminders) {
   const reminders = filterReminders(allReminders)
-  const area = document.getElementById('reminders-area')
-  
+  const area      = document.getElementById('reminders-area')
+  const count     = document.getElementById('reminder-count')
+
+  count.textContent = reminders.length > 0 ? reminders.length : ''
+
   if (reminders.length === 0) {
-    area.innerHTML = '<div class="empty-state">No reminders yet. Tap the mic and speak.</div>'
+    const labels = {
+      reminders: 'No active reminders yet',
+      recurring:  'No recurring reminders',
+      done:       'Nothing marked done yet'
+    }
+    area.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+        </div>
+        <p>${labels[currentView] || 'Nothing here'}</p>
+        <span>Tap the mic button and speak</span>
+      </div>`
     return
   }
-  
-  const typeColors = {
-    meeting: '#0081a7', medication: '#0a5c44', task: '#c4501e', casual: '#aaa'
-  }
+
   area.innerHTML = ''
-  reminders.forEach(r => {
+  reminders.forEach((r, i) => {
     const time = r.datetime
       ? new Date(r.datetime).toLocaleString('en-US', {
           weekday: 'short', month: 'short', day: 'numeric',
           hour: 'numeric', minute: '2-digit'
         })
       : 'No time set'
+
     const card = document.createElement('div')
-    card.className = 'card'
+    card.className = `card${r.done ? ' is-done' : ''}`
+    card.dataset.type = r.type
+    card.style.animationDelay = `${i * 40}ms`
     card.innerHTML = `
       <div class="cdot" style="background:${typeColors[r.type] || '#aaa'}"></div>
       <div class="cbody">
         <div class="ctitle">${r.title}</div>
         <div class="csub">${time}${r.location ? ' · ' + r.location : ''}</div>
       </div>
-      <div style="display:flex;gap:5px;align-items:center">
+      <div class="card-actions">
         <span class="tag tag-${r.type}">${r.type}</span>
         ${r.repeat !== 'none' ? `<span class="tag tag-rec">${r.repeat}</span>` : ''}
-        <button onclick="markDone('${r.id}')" style="background:none;border:none;cursor:pointer;font-size:16px;" title="Mark done">✓</button>
-      </div>
-    `
+        ${!r.done ? `
+          <button class="done-btn" onclick="markDone('${r.id}')" title="Mark done">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </button>` : ''}
+      </div>`
     area.appendChild(card)
   })
 }
@@ -367,36 +392,41 @@ async function markDone(id) {
   loadReminders()
 }
 
-// ─── Sidebar Navigation ───────────────────────────────────────────────────────
+// ─── Navigation ───────────────────────────────────────────────────────────────
+function switchView(view) {
+  currentView = view
+
+  // Update nav active state
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'))
+  const activeBtn = document.getElementById(`nav-${view}`)
+  if (activeBtn) activeBtn.classList.add('active')
+
+  // Update page title
+  const titles = { reminders: 'Reminders', recurring: 'Recurring', done: 'Done', settings: 'Settings' }
+  document.getElementById('page-title').textContent = titles[view] || view
+
+  // Show/hide panels
+  const remArea      = document.getElementById('reminders-area')
+  const settingsPanel = document.getElementById('settings-panel')
+
+  if (view === 'settings') {
+    remArea.style.display      = 'none'
+    settingsPanel.style.display = 'block'
+    document.getElementById('reminder-count').textContent = ''
+  } else {
+    remArea.style.display      = ''
+    settingsPanel.style.display = 'none'
+    loadReminders()
+  }
+}
+
+// ─── Settings Toggle ──────────────────────────────────────────────────────────
+function toggleNotif() {
+  const t = document.getElementById('notif-toggle')
+  t.classList.toggle('on')
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   loadReminders()
-  const navItems = document.querySelectorAll('.nav-item')
-  navItems.forEach(item => {
-    item.addEventListener('click', (e) => {
-      e.preventDefault()
-      const view = item.textContent.toLowerCase()
-      
-      // Update active state
-      navItems.forEach(ni => ni.classList.remove('active'))
-      item.classList.add('active')
-      
-      // Update view and title
-      if (view === 'reminders') {
-        currentView = 'reminders'
-        document.querySelector('.page-title').textContent = 'Reminders'
-      } else if (view === 'recurring') {
-        currentView = 'recurring'
-        document.querySelector('.page-title').textContent = 'Recurring'
-      } else if (view === 'done') {
-        currentView = 'done'
-        document.querySelector('.page-title').textContent = 'Done'
-      } else if (view === 'settings') {
-        currentView = 'settings'
-        document.querySelector('.page-title').textContent = 'Settings'
-      }
-      loadReminders()
-    })
-  })
 })
-
-loadReminders()
