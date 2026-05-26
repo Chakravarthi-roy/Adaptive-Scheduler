@@ -83,20 +83,12 @@ function setMicState(state) {
   micBtn.classList.remove('recording', 'processing')
   typeBtn.style.display = awaitingReply ? 'flex' : 'none'
   switch (state) {
-    case 'idle':
-      showToast(awaitingReply ? '💬 tap mic to reply, or type below' : '')
-      break
     case 'recording':
       micBtn.classList.add('recording')
-      showToast('🔴 Recording… tap again to stop')
       break
     case 'processing':
-      micBtn.classList.add('processing')
-      showToast('⏳ Transcribing…')
-      break
     case 'thinking':
       micBtn.classList.add('processing')
-      showToast('🧠 Thinking…')
       break
   }
 }
