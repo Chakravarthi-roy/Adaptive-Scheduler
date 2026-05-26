@@ -51,7 +51,7 @@ self.addEventListener('push', e => {
 
   const options = {
     body,
-    vibrate: [200, 100, 200],
+    vibrate: sound ? [200, 100, 200] : [],
     tag: reminder_id ? `${reminder_id}-${is_pre_alert ? 'pre' : 'main'}` : 'reminder',
     requireInteraction: persistent,
     actions,

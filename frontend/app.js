@@ -185,7 +185,11 @@ async function handleAudioInput(audioBlob) {
 
 async function handleTextInput(text) {
   addBubble(text, 'user')
-  agentMessages.push({ role: 'user', content: text })
+  // prepend settings context to first user message so agent knows time preferences
+  const msgContent = agentMessages.length === 0
+    ? buildSettingsContext() + '\n' + text
+    : text
+  agentMessages.push({ role: 'user', content: msgContent })
   setMicState('thinking')
   awaitingReply = false
 
@@ -428,6 +432,7 @@ function switchView(view) {
     remArea.style.display      = 'none'
     settingsPanel.style.display = 'block'
     document.getElementById('reminder-count').textContent = ''
+    populateSettings()
   } else {
     remArea.style.display      = ''
     settingsPanel.style.display = 'none'
@@ -435,10 +440,80 @@ function switchView(view) {
   }
 }
 
-// ─── Settings Toggle ──────────────────────────────────────────────────────────
-function toggleNotif() {
-  const t = document.getElementById('notif-toggle')
+// ─── Settings ────────────────────────────────────────────────────────────────
+const SETTINGS_KEY = 'scheduler_settings'
+
+const DEFAULTS = {
+  morning:      '08:00',
+  evening:      '18:00',
+  night:        '21:00',
+  inABit:       10,
+  afterAWhile:  30,
+  vibration:    true
+}
+
+function loadSettings() {
+  try {
+    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }
+  } catch { return { ...DEFAULTS } }
+}
+
+function saveSettings() {
+  const s = {
+    morning:     document.getElementById('s-morning')?.value     || DEFAULTS.morning,
+    evening:     document.getElementById('s-evening')?.value     || DEFAULTS.evening,
+    night:       document.getElementById('s-night')?.value       || DEFAULTS.night,
+    inABit:      parseInt(document.getElementById('s-in-a-bit')?.value)     || DEFAULTS.inABit,
+    afterAWhile: parseInt(document.getElementById('s-after-a-while')?.value) || DEFAULTS.afterAWhile,
+    vibration:   document.getElementById('vibration-toggle')?.classList.contains('on') ?? DEFAULTS.vibration
+  }
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
+}
+
+function populateSettings() {
+  const s = loadSettings()
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val }
+  set('s-morning', s.morning)
+  set('s-evening', s.evening)
+  set('s-night',   s.night)
+  set('s-in-a-bit',      s.inABit)
+  set('s-after-a-while', s.afterAWhile)
+  // update displays
+  const d1 = document.getElementById('s-in-a-bit-display')
+  const d2 = document.getElementById('s-after-a-while-display')
+  if (d1) d1.textContent = s.inABit
+  if (d2) d2.textContent = s.afterAWhile
+  // vibration toggle
+  const vt = document.getElementById('vibration-toggle')
+  if (vt) { s.vibration ? vt.classList.add('on') : vt.classList.remove('on') }
+}
+
+function stepValue(id, delta) {
+  const input = document.getElementById(id)
+  const display = document.getElementById(id + '-display')
+  if (!input || !display) return
+  const min = 1, max = 120
+  let val = parseInt(input.value) + delta
+  val = Math.max(min, Math.min(max, val))
+  input.value = val
+  display.textContent = val
+  saveSettings()
+  // haptic feedback on step
+  if (loadSettings().vibration && navigator.vibrate) navigator.vibrate(30)
+}
+
+function toggleVibration() {
+  const t = document.getElementById('vibration-toggle')
   t.classList.toggle('on')
+  const isOn = t.classList.contains('on')
+  if (isOn && navigator.vibrate) navigator.vibrate([80, 40, 80])
+  saveSettings()
+}
+
+// Build a settings context string to inject into agent messages
+function buildSettingsContext() {
+  const s = loadSettings()
+  return `[User preferences: "morning"=${s.morning}, "evening"=${s.evening}, "night"=${s.night}, "in a bit"=${s.inABit} minutes, "after a while"=${s.afterAWhile} minutes]`
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
