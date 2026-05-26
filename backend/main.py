@@ -102,9 +102,13 @@ TOOLS = [
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "List of participant names, always an empty array [] if none"
+                    },
+                    "action_label": {
+                        "type": "string",
+                        "description": "A short, natural action button label shown when the reminder fires. Make it specific to the reminder — what the user will DO. E.g. 'Having lunch 🍜', 'Took it 💊', 'In the meeting 📅', 'Called her ✓', 'Submitted ✓'. Keep it under 5 words. No generic labels like 'Done' or 'OK'."
                     }
                 },
-                "required": ["title", "type", "repeat", "location", "participants"]
+                "required": ["title", "type", "repeat", "location", "participants", "action_label"]
             }
         }
     },
@@ -158,6 +162,16 @@ Rules for CREATING reminders:
 - "evening" = 18:00, "morning" = 08:00, "night" = 21:00, "in a bit" = 10 mins from now
 - "next sunday" = sunday of next week
 - Strip filler words like ra, yaar, na, bro, da from titles
+
+ACTION LABEL GUIDE — generate a short, specific action_label for the button shown when the reminder fires:
+- It should reflect what the user does AT that moment, not a generic "Done"
+- "remind me to have lunch at 1" → "Having lunch 🍜" or "Ate it ✓"
+- "call mom at 5" → "Called her ✓"
+- "take insulin at 8am" → "Took it 💊"
+- "team standup at 9" → "In standup 📅"
+- "submit report by 3pm" → "Submitted ✓"
+- "gym at 6am" → "At the gym 💪"
+- Keep it under 5 words, use an emoji if it fits naturally
 
 REMINDER TYPE GUIDE — choose the type that fits naturally, not rigidly:
 - "meeting": scheduled appointments, calls, interviews, classes, events with others that have a fixed start time and benefit from a heads-up
@@ -247,7 +261,7 @@ Current date and time (IST): {now}
 RESPOND ONLY WITH JSON in this format:
 {{"action": "get_reminders"}} - to see existing reminders
 {{"action": "ask_user", "question": "Your question here"}} - to ask user for info
-{{"action": "create_reminder", "title": "...", "datetime": "...", "location": "...", "type": "...", "repeat": "...", "participants": []}}
+{{"action": "create_reminder", "title": "...", "datetime": "...", "location": "...", "type": "...", "repeat": "...", "participants": [], "action_label": "..."}}
 {{"action": "delete_reminder", "ids": [...], "confirmation": "..."}}
 
 Always respond with ONLY valid JSON, no other text."""
@@ -320,6 +334,7 @@ def save_reminder(data: dict):
             type=data.get("type", "casual"),
             repeat=data.get("repeat", "none"),
             participants=json.dumps(data.get("participants", [])),
+            action_label=data.get("action_label") or None,
             done=False
         )
         db.add(reminder)

@@ -13,26 +13,26 @@ PRE_ALERT_MINUTES = {
     "casual":     0   # on time, no pre-alert
 }
 
-# ─── Button labels by type ────────────────────────────────────────────────────
-ACTION_LABELS = {
-    "medication": {"action": "took_it", "label": "Took it 💊"},
-    "meeting": {"action": "started", "label": "Started 📅"},
-    "task": {"action": "doing", "label": "Doing it ✅"},
-    "casual": {"action": "done", "label": "Done ✓"}
+# ─── Fallback button labels (used when no custom label stored on reminder) ────
+_DEFAULT_LABELS = {
+    "medication": {"action": "took_it",  "label": "Took it 💊"},
+    "meeting":    {"action": "started",  "label": "Started 📅"},
+    "task":       {"action": "doing",    "label": "Doing it ✓"},
+    "casual":     {"action": "done",     "label": "Done ✓"},
 }
+
+def get_action_config(reminder):
+    custom = getattr(reminder, "action_label", None)
+    default = _DEFAULT_LABELS.get(reminder.type, _DEFAULT_LABELS["casual"])
+    label = custom if custom else default["label"]
+    return default["action"], label
 
 # ─── Notification content by type ────────────────────────────────────────────
 def build_notification(reminder, is_pre_alert=False):
     title = reminder.title
     time_str = reminder.datetime.strftime("%I:%M %p")
     location_str = f" · {reminder.location}" if reminder.location else ""
-    
-    # Get action and label for this type
-    action_config = ACTION_LABELS.get(reminder.type, ACTION_LABELS["casual"])
-    action = action_config["action"]
-    action_label = action_config["label"]
-    
-    # Determine persistence based on type
+    action, action_label = get_action_config(reminder)
     persistent = reminder.type == "medication"
 
     if is_pre_alert:

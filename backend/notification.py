@@ -7,13 +7,20 @@ import os
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY")
 VAPID_EMAIL = os.getenv("VAPID_EMAIL")
 
-# ─── Button labels by type ────────────────────────────────────────────────────
-ACTION_LABELS = {
-    "medication": {"action": "took_it", "label": "Took it 💊"},
-    "meeting": {"action": "started", "label": "Started 📅"},
-    "task": {"action": "doing", "label": "Doing it ✅"},
-    "casual": {"action": "done", "label": "Done ✓"}
+# ─── Fallback button labels by type (used when no custom label is stored) ────
+_DEFAULT_LABELS = {
+    "medication": {"action": "took_it",  "label": "Took it 💊"},
+    "meeting":    {"action": "started",  "label": "Started 📅"},
+    "task":       {"action": "doing",    "label": "Doing it ✓"},
+    "casual":     {"action": "done",     "label": "Done ✓"},
 }
+
+def get_action_config(reminder):
+    """Return (action_key, label) — uses reminder.action_label if set, else type default."""
+    custom = getattr(reminder, 'action_label', None)
+    default = _DEFAULT_LABELS.get(reminder.type, _DEFAULT_LABELS["casual"])
+    label = custom if custom else default["label"]
+    return default["action"], label
 
 # ─── Pre-alert config by type ─────────────────────────────────────────────────
 PRE_ALERT_MINUTES = {
@@ -28,9 +35,7 @@ def build_notification(reminder, is_pre_alert=False):
     time_str = reminder.datetime.strftime("%I:%M %p")
     location_str = f" · {reminder.location}" if reminder.location else ""
     
-    action_config = ACTION_LABELS.get(reminder.type, ACTION_LABELS["casual"])
-    action = action_config["action"]
-    action_label = action_config["label"]
+    action, action_label = get_action_config(reminder)
     persistent = reminder.type == "medication"
 
     if is_pre_alert:
