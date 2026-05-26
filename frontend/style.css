@@ -16,7 +16,7 @@
   --border:  rgba(221,161,94,0.22);
 
   --app-w:   640px;
-  --nav-h:   68px;
+  --nav-h:   70px;
   --nav-gap: 20px;
   --rec-size: 72px;   /* bigger mic button */
 }
@@ -48,7 +48,7 @@ body {
   position: fixed;
   top: 0;
   /* +30px accounts for the nav's border-radius so lines don't touch the curve */
-  bottom: calc(var(--nav-h) + var(--nav-gap) + 30px);
+  bottom: calc(var(--nav-h));
   width: 1px;
   background: rgba(221,161,94,0.28);
   z-index: 3;
@@ -374,11 +374,6 @@ body {
 .type-area button:hover { background: #c48a4a; }
 
 /* ── Floating bottom nav — speed-breaker shape ────────────────────────── */
-/*
-   Speed-breaker = flat bottom, rounded dome on top.
-   We achieve this with border-radius only on top corners,
-   then make the nav taller in the center via the lifted mic button.
-*/
 .bottom-nav {
   position: fixed;
   bottom: var(--nav-gap);
@@ -387,14 +382,14 @@ body {
   width: min(calc(100vw - 28px), var(--app-w));
   height: var(--nav-h);
   background: var(--brown);
-  border-radius: 36px 36px 20px 20px;   /* more rounded on top = speed-breaker dome */
+  border-radius: 25px 25px 25px 25px;
   display: flex;
   align-items: center;
   justify-content: space-around;
   padding: 0 16px;
   z-index: 10;
   box-shadow:
-    0 -2px 0 rgba(255,255,255,0.12) inset,   /* top highlight like a bump */
+    0 -2px 0 rgba(255,255,255,0.12) inset,
     0 10px 36px rgba(221,161,94,0.35),
     0 3px 10px  rgba(221,161,94,0.2);
 }
@@ -433,7 +428,6 @@ body {
   text-transform: uppercase;
   color: rgba(254,250,224,0.42);
   transition: color 0.2s;
-  /* hidden on mobile — shown on desktop via media query below */
   display: none;
 }
 .nav-btn.active .nav-label { color: var(--cream); }
@@ -462,7 +456,6 @@ body {
   flex-shrink: 0;
   border: none;
   cursor: pointer;
-  /* lifts above the nav to create the speed-breaker bump peak */
   margin-bottom: calc(var(--nav-h) * 0.55);
   box-shadow:
     0 4px 0 rgba(0,0,0,0.08),
@@ -749,9 +742,14 @@ body {
 
 /* ── Mobile tweaks ────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  :root { --rec-size: 58px; --nav-h: 64px; }
+  /* shrink the mic SVG icon inside the record button on phone */
+  .record-icon svg { width: 22px; height: 22px; }
+  /* shrink nav icons slightly too */
+  .nav-icon svg    { width: 20px; height: 20px; }
 }
 @media (max-width: 400px) {
-  .nav-btn { width: 40px; height: 40px; }
-  :root    { --rec-size: 52px; --nav-h: 60px; }
+  .nav-btn         { width: 40px; height: 40px; }
+  :root            { --rec-size: 62px; }
+  .record-icon svg { width: 20px; height: 20px; }
+  .nav-icon svg    { width: 18px; height: 18px; }
 }
