@@ -18,6 +18,7 @@ self.addEventListener('push', e => {
   let action_label = null
   let reminder_id = null
   let sound = true
+  let is_pre_alert = false
 
   try {
     const data = e.data.json()
@@ -27,73 +28,76 @@ self.addEventListener('push', e => {
     action = data.action || null
     action_label = data.action_label || null
     reminder_id = data.reminder_id || null
-    sound = data.sound !== false  // default to true
+    sound = data.sound !== false
+    is_pre_alert = data.is_pre_alert || false
   } catch {
     title = '🔔 Reminder'
     body = e.data.text()
   }
 
-  // build actions array for notification buttons
   const actions = []
-  if (action && action_label) {
-    actions.push({ action, title: action_label })
+
+  if (is_pre_alert) {
+    // Pre-alert: just an "OK" dismiss — no mark-done
+    actions.push({ action: 'dismiss_pre', title: 'OK 👍' })
+    actions.push({ action: 'snooze', title: 'Snooze 10m ⏰' })
+  } else {
+    // On-time: show the real action (mark done / took it / etc.)
+    if (action && action_label) {
+      actions.push({ action, title: action_label })
+    }
+    actions.push({ action: 'snooze', title: 'Snooze 10m ⏰' })
   }
-  actions.push({ action: 'snooze', title: 'Snooze 10m ⏰' })
 
   const options = {
     body,
     vibrate: [200, 100, 200],
-    tag: reminder_id || 'reminder',
+    tag: reminder_id ? `${reminder_id}-${is_pre_alert ? 'pre' : 'main'}` : 'reminder',
     requireInteraction: persistent,
     actions,
     data: {
       url: self.location.origin,
-      reminder_id
+      reminder_id,
+      is_pre_alert
     }
   }
 
-  // add sound to notification
-  if (sound) {
-    options.sound = 'default'
-  }
+  if (sound) options.sound = 'default'
 
-  e.waitUntil(
-    self.registration.showNotification(title, options)
-  )
+  e.waitUntil(self.registration.showNotification(title, options))
 })
 
 self.addEventListener('notificationclick', e => {
   const action = e.action
   const reminder_id = e.notification.data?.reminder_id
+  const is_pre_alert = e.notification.data?.is_pre_alert || false
   e.notification.close()
 
-  // Backend API URL - update this to match your backend
   const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
 
+  // Snooze — works for both pre-alert and on-time
   if (action === 'snooze' && reminder_id) {
-    // tell backend to snooze this reminder by 10 mins
     e.waitUntil(
-      fetch(`${API_BASE}/reminders/${reminder_id}/snooze`, {
-        method: 'POST'
-      }).catch(err => console.log('snooze failed:', err))
+      fetch(`${API_BASE}/reminders/${reminder_id}/snooze`, { method: 'POST' })
+        .catch(err => console.log('snooze failed:', err))
     )
     return
   }
 
-  // handle any dynamic action — if it's not snooze, it's a "mark done" action
-  if (action && action !== 'snooze') {
-    if (reminder_id) {
-      e.waitUntil(
-        fetch(`${API_BASE}/reminders/${reminder_id}/done`, {
-          method: 'PATCH'
-        }).catch(err => console.log('mark done failed:', err))
-      )
-    }
+  // Pre-alert dismiss — just close, do nothing
+  if (action === 'dismiss_pre' || is_pre_alert) {
     return
   }
 
-  // default — open the app
-  e.waitUntil(
-    clients.openWindow(e.notification.data.url)
-  )
+  // On-time action (mark done / took it / etc.)
+  if (action && action !== 'snooze' && reminder_id) {
+    e.waitUntil(
+      fetch(`${API_BASE}/reminders/${reminder_id}/done`, { method: 'PATCH' })
+        .catch(err => console.log('mark done failed:', err))
+    )
+    return
+  }
+
+  // Default — open the app
+  e.waitUntil(clients.openWindow(e.notification.data.url))
 })

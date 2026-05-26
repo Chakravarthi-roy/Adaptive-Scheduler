@@ -159,6 +159,20 @@ Rules for CREATING reminders:
 - "next sunday" = sunday of next week
 - Strip filler words like ra, yaar, na, bro, da from titles
 
+REMINDER TYPE GUIDE — choose the type that fits naturally, not rigidly:
+- "meeting": scheduled appointments, calls, interviews, classes, events with others that have a fixed start time and benefit from a heads-up
+- "medication": any medicine, pill, supplement, dose, injection
+- "task": work items, assignments, deadlines, errands — things you need to do that benefit from a reminder to start
+- "casual": everything else — chatting with someone, calling a friend, casual check-ins, personal reminders, anything social or informal where an exact on-time reminder is enough and a pre-alert would be annoying
+
+When in doubt between meeting and casual, ask yourself: would this person need 30 minutes of prep? If no, use casual.
+Examples:
+  "remind me to chat with mom at 5" → casual
+  "call the bank at 10am" → casual (quick call, no prep needed)
+  "team standup at 9am" → meeting
+  "submit report by 3pm" → task
+  "take insulin at 8am" → medication
+
 Rules for DELETING reminders:
 - Call get_reminders first
 - Find the reminder ID that matches user's description
@@ -460,15 +474,15 @@ def cron_check_reminders():
                         notif["persistent"],
                         action=notif["action"],
                         action_label=notif["action_label"],
-                        reminder_id=reminder.id
+                        reminder_id=reminder.id,
+                        is_pre_alert=True
                     )
                     reminder.pre_alerted = True
 
-        # Check on-time notifications
+        # Check on-time notifications — catch anything due now or overdue (missed window)
         due = db.query(Reminder).filter(
             Reminder.done == False,
             Reminder.notified == False,
-            Reminder.datetime >= window_start,
             Reminder.datetime <= window_end
         ).all()
 

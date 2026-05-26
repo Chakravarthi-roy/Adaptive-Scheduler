@@ -150,17 +150,17 @@ def check_reminders():
                     notif["persistent"],
                     action=notif["action"],
                     action_label=notif["action_label"],
-                    reminder_id=reminder.id
+                    reminder_id=reminder.id,
+                    is_pre_alert=True
                 )
                 if result.get("status") == "sent":
                     reminder.pre_alerted = True
                     pre_alerted_count += 1
 
-        # ── 2. Check on-time notifications ────────────────────────────────────
+        # ── 2. Check on-time notifications — catch overdue too ───────────────
         due = db.query(Reminder).filter(
             Reminder.done == False,
             Reminder.notified == False,
-            Reminder.datetime >= window_start,
             Reminder.datetime <= window_end
         ).all()
 

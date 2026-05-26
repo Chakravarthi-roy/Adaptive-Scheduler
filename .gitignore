@@ -7,8 +7,8 @@ backend/*.webm
 .env
 backend/.env
 
-venv/
-backend/venv/
+env/
+backend/env/
 
 # General
 *.pyc

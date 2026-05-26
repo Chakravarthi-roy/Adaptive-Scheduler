@@ -111,7 +111,7 @@ def build_notification(reminder, is_pre_alert=False):
         "sound": True
     }
 
-def send_notification(title, body, persistent=False, action=None, action_label=None, reminder_id=None):
+def send_notification(title, body, persistent=False, action=None, action_label=None, reminder_id=None, is_pre_alert=False):
     db = SessionLocal()
     try:
         sub = db.query(PushSubscription).first()
@@ -123,7 +123,8 @@ def send_notification(title, body, persistent=False, action=None, action_label=N
             "title": title,
             "body": body,
             "persistent": persistent,
-            "reminder_id": reminder_id
+            "reminder_id": reminder_id,
+            "is_pre_alert": is_pre_alert   # sw.js uses this to skip mark-done on pre-alerts
         }
 
         if action and action_label:
