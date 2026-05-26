@@ -298,6 +298,7 @@ function resetConversation() {
 let _allReminders = []
 
 function showSkeleton() {
+  document.getElementById('reminder-count').textContent = ''
   const area = document.getElementById('reminders-area')
   area.innerHTML = Array.from({length: 3}, () => `
     <div class="card skeleton-card">
