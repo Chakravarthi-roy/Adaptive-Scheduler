@@ -16,7 +16,7 @@
   --border:  rgba(221,161,94,0.22);
 
   --app-w:   640px;
-  --nav-h:   70px;
+  --nav-h:   68px;
   --nav-gap: 20px;
   --rec-size: 72px;   /* bigger mic button */
 }
@@ -48,7 +48,7 @@ body {
   position: fixed;
   top: 0;
   /* +30px accounts for the nav's border-radius so lines don't touch the curve */
-  bottom: calc(var(--nav-h));
+  bottom: calc(var(--nav-h) + var(--nav-gap) + 30px);
   width: 1px;
   background: rgba(221,161,94,0.28);
   z-index: 3;
@@ -387,7 +387,7 @@ body {
   width: min(calc(100vw - 28px), var(--app-w));
   height: var(--nav-h);
   background: var(--brown);
-  border-radius: 25px 25px 25px 25px;   /* more rounded on top = speed-breaker dome */
+  border-radius: 36px 36px 20px 20px;   /* more rounded on top = speed-breaker dome */
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -748,7 +748,10 @@ body {
 }
 
 /* ── Mobile tweaks ────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  :root { --rec-size: 58px; --nav-h: 64px; }
+}
 @media (max-width: 400px) {
-  .nav-btn    { width: 40px; height: 40px; }
-  :root       { --rec-size: 62px; }
+  .nav-btn { width: 40px; height: 40px; }
+  :root    { --rec-size: 52px; --nav-h: 60px; }
 }
