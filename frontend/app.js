@@ -297,14 +297,36 @@ function resetConversation() {
 // ─── Reminders ────────────────────────────────────────────────────────────────
 let _allReminders = []
 
+function showSkeleton() {
+  const area = document.getElementById('reminders-area')
+  area.innerHTML = Array.from({length: 3}, () => `
+    <div class="card skeleton-card">
+      <div class="sk sk-dot"></div>
+      <div class="sk-body">
+        <div class="sk sk-title"></div>
+        <div class="sk sk-sub"></div>
+      </div>
+      <div class="sk sk-tag"></div>
+    </div>`).join('')
+}
+
 async function loadReminders() {
   if (currentView === 'settings') return
+  showSkeleton()
   try {
     const res = await fetch(`${API_BASE}/reminders`)
     _allReminders = await res.json()
     renderReminders(_allReminders)
   } catch (err) {
     console.error('could not load reminders:', err)
+    const area = document.getElementById('reminders-area')
+    area.innerHTML = `<div class="empty-state"><div class="empty-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg></div>
+      <p>Couldn't load reminders</p>
+      <span>Check your connection and try again</span></div>`
   }
 }
 
