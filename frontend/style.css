@@ -109,7 +109,7 @@ body {
   align-items: center;
   gap: 10px;
   padding: 0 22px;
-  background: var(#fefae0);
+  background: #fefae0;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -348,12 +348,7 @@ body {
 }
 .type-area button:hover { background: #c48a4a; }
 
-/* ── Floating bottom nav — speed-breaker shape ────────────────────────── */
-/*
-   Speed-breaker = flat bottom, rounded dome on top.
-   We achieve this with border-radius only on top corners,
-   then make the nav taller in the center via the lifted mic button.
-*/
+/* ── Floating bottom nav ──────────────────────────────────────────────── */
 .bottom-nav {
   position: fixed;
   bottom: var(--nav-gap);
@@ -369,21 +364,23 @@ body {
   padding: 0 16px;
   z-index: 10;
   box-shadow:
-    0 -2px 0 rgba(255,255,255,0.12) inset,   /* top highlight like a bump */
+    0 -2px 0 rgba(255,255,255,0.12) inset,
     0 10px 36px rgba(221,161,94,0.35),
     0 3px 10px  rgba(221,161,94,0.2);
 }
 
-/* ── Nav buttons (icons only, no labels) ──────────────────────────────── */
+/* ── Nav buttons — icons only on mobile, icon+label on desktop ────────── */
 .nav-btn {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   background: none;
   border: none;
   cursor: pointer;
   width: 48px; height: 48px;
-  border-radius: 50%;
+  border-radius: 14px;
   transition: background 0.15s;
   position: relative;
   flex-shrink: 0;
@@ -395,16 +392,29 @@ body {
   align-items: center;
   justify-content: center;
   color: rgba(254,250,224,0.42);
-  transition: color 0.2s, transform 0.15s;
+  transition: color 0.2s;
 }
 .nav-btn.active .nav-icon { color: var(--cream); }
 .nav-btn:hover:not(.nav-record) .nav-icon { color: rgba(254,250,224,0.75); }
 
-/* active pip dot below icon */
+/* labels — hidden on mobile, shown on desktop */
+.nav-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(254,250,224,0.42);
+  transition: color 0.2s;
+  display: none;
+}
+.nav-btn.active .nav-label { color: var(--cream); }
+
+/* active pip dot — only on mobile (replaced by label on desktop) */
 .nav-btn.active:not(.nav-record)::after {
   content: '';
   position: absolute;
-  bottom: 6px;
+  bottom: 5px;
   left: 50%;
   transform: translateX(-50%);
   width: 4px; height: 4px;
@@ -424,7 +434,6 @@ body {
   flex-shrink: 0;
   border: none;
   cursor: pointer;
-  /* lifts above the nav to create the speed-breaker bump peak */
   margin-bottom: calc(var(--nav-h) * 0.55);
   box-shadow:
     0 4px 0 rgba(0,0,0,0.08),
@@ -450,25 +459,20 @@ body {
   justify-content: center;
   color: var(--brown);
 }
-
-/* recording */
 .nav-record.recording {
   background: #c0392b;
-  color: #fff;
   animation: recPulse 1s infinite;
   box-shadow: 0 4px 0 rgba(0,0,0,0.1), 0 8px 24px rgba(192,57,43,0.5), 0 0 0 5px rgba(192,57,43,0.2);
 }
 .nav-record.recording .record-icon { color: #fff; }
 .nav-record.recording .record-ring { animation: ringExpand 1.1s infinite; border-color: rgba(192,57,43,0.4); }
-
-/* processing */
 .nav-record.processing {
   background: var(--sage);
   box-shadow: 0 4px 0 rgba(0,0,0,0.08), 0 8px 24px rgba(204,213,174,0.5), 0 0 0 5px rgba(204,213,174,0.25);
 }
 .nav-record.processing .record-icon { color: #4a6a2a; }
 
-@keyframes recPulse  { 0%,100%{transform:scale(1)} 50%{transform:scale(1.07)} }
+@keyframes recPulse   { 0%,100%{transform:scale(1)} 50%{transform:scale(1.07)} }
 @keyframes ringExpand { 0%{inset:-6px;opacity:.9} 100%{inset:-22px;opacity:0} }
 
 /* ── Mic toast ────────────────────────────────────────────────────────── */
@@ -551,7 +555,6 @@ body {
   justify-content: center;
 }
 .overlay.show { display: flex; }
-
 .modal {
   background: var(--cream);
   border-radius: 26px 26px 0 0;
@@ -566,14 +569,12 @@ body {
   from { transform: translateY(60px); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
 }
-
 .modal-handle {
   width: 40px; height: 4px;
   border-radius: 2px;
   background: rgba(221,161,94,0.35);
   margin: 14px auto 20px;
 }
-
 .modal-header {
   display: flex;
   align-items: center;
@@ -601,7 +602,6 @@ body {
   transition: background 0.15s, color 0.15s;
 }
 .modal-close:hover { background: var(--sage); color: var(--text); }
-
 .field { margin-bottom: 14px; }
 .field-row { display: flex; gap: 12px; }
 .field-row .field { flex: 1; }
@@ -632,12 +632,7 @@ body {
   box-shadow: 0 0 0 3px rgba(221,161,94,0.12);
 }
 .field input::placeholder { color: var(--muted); opacity: 0.6; }
-
-.modal-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 22px;
-}
+.modal-actions { display: flex; gap: 10px; margin-top: 22px; }
 .btn-save {
   flex: 1;
   padding: 13px 18px;
@@ -658,7 +653,6 @@ body {
 .btn-save:hover    { background: #c48a4a; }
 .btn-save:active   { transform: scale(0.98); }
 .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
-
 .btn-cancel {
   padding: 13px 18px;
   border-radius: 13px;
@@ -671,6 +665,21 @@ body {
   transition: background 0.15s;
 }
 .btn-cancel:hover { background: var(--sage); color: var(--text); }
+
+/* ── Desktop — nav labels + wider buttons ─────────────────────────────── */
+@media (min-width: 641px) {
+  .nav-label { display: block; }
+  .nav-btn:not(.nav-record) {
+    width: 72px;
+    height: 52px;
+    border-radius: 14px;
+  }
+  /* hide pip dot when label is visible */
+  .nav-btn.active:not(.nav-record)::after { display: none; }
+  /* nav needs a touch more height to fit icon+label comfortably */
+  .bottom-nav { height: 58px; }
+  .nav-record { margin-bottom: calc(58px * 0.6); }
+}
 
 /* ── Desktop modal ────────────────────────────────────────────────────── */
 @media (min-width: 641px) {
