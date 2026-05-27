@@ -38,15 +38,14 @@ self.addEventListener('push', e => {
   const actions = []
 
   if (is_pre_alert) {
-    // Pre-alert: just an "OK" dismiss — no mark-done
+    // Pre-alert: just one OK button — Chrome adds Unsubscribe automatically, keep it simple
     actions.push({ action: 'dismiss_pre', title: 'OK 👍' })
-    actions.push({ action: 'snooze', title: 'Snooze 10m ⏰' })
   } else {
-    // On-time: show the real action (mark done / took it / etc.)
+    // On-time: just the done action — no snooze button, keeps it uncluttered on mobile
+    // User can snooze by tapping the notification body (opens app) if needed
     if (action && action_label) {
       actions.push({ action, title: action_label })
     }
-    actions.push({ action: 'snooze', title: 'Snooze 10m ⏰' })
   }
 
   const options = {

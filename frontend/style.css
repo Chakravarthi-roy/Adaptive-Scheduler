@@ -67,6 +67,8 @@ body {
   position: sticky;
   top: 0;
   z-index: 5;
+  width: 100%;
+  max-width: var(--app-w);
 }
 .top-bar-inner {
   height: 100%;
