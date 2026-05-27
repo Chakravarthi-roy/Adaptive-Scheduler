@@ -40,10 +40,21 @@ document.getElementById('today-date').textContent = new Date().toLocaleDateStrin
 })
 
 function updateClock() {
-  const el = document.getElementById('today-time')
-  if (el) el.textContent = new Date().toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+  const s = loadSettings()
+  const tz = s.timezone || 'Asia/Kolkata'
+  const now = new Date()
+  const timeEl = document.getElementById('today-time')
+  const tzEl   = document.getElementById('tz-badge')
+  if (timeEl) timeEl.textContent = now.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', second: '2-digit',
+    hour12: true, timeZone: tz
   })
+  if (tzEl) {
+    // show short timezone abbreviation
+    const shortTz = now.toLocaleTimeString('en-US', { timeZoneName: 'short', timeZone: tz })
+      .split(' ').pop()
+    tzEl.textContent = shortTz
+  }
 }
 updateClock()
 setInterval(updateClock, 1000)
@@ -449,7 +460,8 @@ const DEFAULTS = {
   night:        '21:00',
   inABit:       10,
   afterAWhile:  30,
-  vibration:    true
+  vibration:    true,
+  timezone:     'Asia/Kolkata'
 }
 
 function loadSettings() {
@@ -465,7 +477,8 @@ function saveSettings() {
     night:       document.getElementById('s-night')?.value       || DEFAULTS.night,
     inABit:      parseInt(document.getElementById('s-in-a-bit')?.value)     || DEFAULTS.inABit,
     afterAWhile: parseInt(document.getElementById('s-after-a-while')?.value) || DEFAULTS.afterAWhile,
-    vibration:   document.getElementById('vibration-toggle')?.classList.contains('on') ?? DEFAULTS.vibration
+    vibration:   document.getElementById('vibration-toggle')?.classList.contains('on') ?? DEFAULTS.vibration,
+    timezone:    document.getElementById('s-timezone')?.value || DEFAULTS.timezone
   }
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
 }
@@ -478,6 +491,7 @@ function populateSettings() {
   set('s-night',   s.night)
   set('s-in-a-bit',      s.inABit)
   set('s-after-a-while', s.afterAWhile)
+  set('s-timezone',      s.timezone)
   // update displays
   const d1 = document.getElementById('s-in-a-bit-display')
   const d2 = document.getElementById('s-after-a-while-display')
@@ -513,7 +527,7 @@ function toggleVibration() {
 // Build a settings context string to inject into agent messages
 function buildSettingsContext() {
   const s = loadSettings()
-  return `[User preferences: "morning"=${s.morning}, "evening"=${s.evening}, "night"=${s.night}, "in a bit"=${s.inABit} minutes, "after a while"=${s.afterAWhile} minutes]`
+  return `[User preferences: timezone=${s.timezone}, "morning"=${s.morning}, "evening"=${s.evening}, "night"=${s.night}, "in a bit"=${s.inABit} minutes, "after a while"=${s.afterAWhile} minutes]`
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

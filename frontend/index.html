@@ -18,7 +18,10 @@
         <div class="app-wordmark">Scheduler</div>
         <div class="top-datetime">
           <div class="top-date" id="today-date"></div>
-          <div class="top-time" id="today-time"></div>
+          <div class="top-time-row">
+            <span class="tz-badge" id="tz-badge">IST</span>
+            <div class="top-time" id="today-time"></div>
+          </div>
         </div>
       </div>
     </header>
@@ -74,10 +77,7 @@
         <div class="settings-group">
           <div class="settings-label">Vague Durations</div>
           <div class="settings-item">
-            <div class="settings-item-label">
-              <span>"in a bit"</span>
-              <span class="settings-hint">means this many minutes</span>
-            </div>
+            <span>"in a bit"</span>
             <div class="settings-stepper">
               <button onclick="stepValue('s-in-a-bit', -5)">−</button>
               <span id="s-in-a-bit-display">10</span>
@@ -87,10 +87,7 @@
             </div>
           </div>
           <div class="settings-item">
-            <div class="settings-item-label">
-              <span>"after a while"</span>
-              <span class="settings-hint">means this many minutes</span>
-            </div>
+            <span>"after a while"</span>
             <div class="settings-stepper">
               <button onclick="stepValue('s-after-a-while', -5)">−</button>
               <span id="s-after-a-while-display">30</span>
@@ -112,6 +109,28 @@
             <div class="toggle" id="vibration-toggle" onclick="toggleVibration()">
               <div class="toggle-knob"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- Timezone -->
+        <div class="settings-group">
+          <div class="settings-label">Timezone</div>
+          <div class="settings-item">
+            <span>Your timezone</span>
+            <select id="s-timezone" onchange="saveSettings()" class="settings-select">
+              <option value="Asia/Kolkata">IST — India</option>
+              <option value="America/New_York">EST — New York</option>
+              <option value="America/Chicago">CST — Chicago</option>
+              <option value="America/Denver">MST — Denver</option>
+              <option value="America/Los_Angeles">PST — Los Angeles</option>
+              <option value="Europe/London">GMT — London</option>
+              <option value="Europe/Paris">CET — Paris</option>
+              <option value="Europe/Berlin">CET — Berlin</option>
+              <option value="Asia/Dubai">GST — Dubai</option>
+              <option value="Asia/Singapore">SGT — Singapore</option>
+              <option value="Asia/Tokyo">JST — Tokyo</option>
+              <option value="Australia/Sydney">AEST — Sydney</option>
+            </select>
           </div>
         </div>
 
