@@ -39,25 +39,7 @@ document.getElementById('today-date').textContent = new Date().toLocaleDateStrin
   weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
 })
 
-function updateClock() {
-  const s = loadSettings()
-  const tz = s.timezone || 'Asia/Kolkata'
-  const now = new Date()
-  const timeEl = document.getElementById('today-time')
-  const tzEl   = document.getElementById('tz-badge')
-  if (timeEl) timeEl.textContent = now.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', second: '2-digit',
-    hour12: true, timeZone: tz
-  })
-  if (tzEl) {
-    // show short timezone abbreviation
-    const shortTz = now.toLocaleTimeString('en-US', { timeZoneName: 'short', timeZone: tz })
-      .split(' ').pop()
-    tzEl.textContent = shortTz
-  }
-}
-updateClock()
-setInterval(updateClock, 1000)
+// clock started after settings loaded — see bottom of Settings section
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let mediaRecorder = null
@@ -523,6 +505,26 @@ function toggleVibration() {
   if (isOn && navigator.vibrate) navigator.vibrate([80, 40, 80])
   saveSettings()
 }
+
+// ─── Clock (defined after DEFAULTS so loadSettings works) ───────────────────
+function updateClock() {
+  const s = loadSettings()
+  const tz = s.timezone || 'Asia/Kolkata'
+  const now = new Date()
+  const timeEl = document.getElementById('today-time')
+  const tzEl   = document.getElementById('tz-badge')
+  if (timeEl) timeEl.textContent = now.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', second: '2-digit',
+    hour12: true, timeZone: tz
+  })
+  if (tzEl) {
+    const shortTz = now.toLocaleTimeString('en-US', { timeZoneName: 'short', timeZone: tz })
+      .split(' ').pop()
+    tzEl.textContent = shortTz
+  }
+}
+updateClock()
+setInterval(updateClock, 1000)
 
 // Build a settings context string to inject into agent messages
 function buildSettingsContext() {
