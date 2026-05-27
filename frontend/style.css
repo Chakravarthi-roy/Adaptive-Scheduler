@@ -474,7 +474,6 @@ body {
   flex-shrink: 0;
   border: none;
   cursor: pointer;
-  margin-bottom: calc(var(--nav-h) * 0.55);
   box-shadow:
     0 4px 0 rgba(0,0,0,0.08),
     0 8px 24px rgba(221,161,94,0.4),
@@ -812,8 +811,8 @@ body {
   /* nav itself needs a touch more height on desktop to fit icon+label */
   .bottom-nav { height: 60px; padding: 0 20px; }
 
-  /* mic button stays circular, adjust its lift */
-  .nav-record { margin-bottom: calc(60px * 0.55); }
+  /* mic button lifts above nav on desktop only */
+  .nav-record { margin-bottom: calc(60px * 0.6); }
 }
 
 /* ── Desktop modal ────────────────────────────────────────────────────── */
@@ -833,9 +832,9 @@ body {
 
 /* ── Mobile tweaks ────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  /* mic button sits inline with other nav items — no floating lift */
+  /* mic button sits inline — no lift */
   .nav-record {
-    margin-bottom: 0;
+    margin-bottom: 0 !important;
     width: 52px;
     height: 52px;
   }
