@@ -22,6 +22,9 @@
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────── */
+html {
+  overflow-x: hidden;
+}
 body {
   font-family: 'DM Sans', sans-serif;
   background: var(--bg);
@@ -40,6 +43,7 @@ body {
   flex-direction: column;
   position: relative;
   isolation: isolate;
+  overflow-x: hidden;
 }
 
 /* side border lines — full height, stop just above the floating nav */
@@ -53,8 +57,8 @@ body {
   z-index: 3;
   pointer-events: none;
 }
-.app::before { left:  max(0px, calc(50vw - var(--app-w)/2)); }
-.app::after  { right: max(0px, calc(50vw - var(--app-w)/2)); }
+.app::before { left:  max(0px, calc(50dvw - var(--app-w)/2)); }
+.app::after  { right: max(0px, calc(50dvw - var(--app-w)/2)); }
 @media (max-width: 640px) {
   .app::before, .app::after { display: none; }
 }
@@ -67,8 +71,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 5;
-  width: 100%;
-  max-width: var(--app-w);
+  /* width is constrained by .app flex container */
 }
 .top-bar-inner {
   height: 100%;
@@ -398,7 +401,7 @@ body {
   bottom: var(--nav-gap);
   left: 50%;
   transform: translateX(-50%);
-  width: min(calc(100vw - 28px), var(--app-w));
+  width: min(calc(100dvw - 28px), var(--app-w));
   height: var(--nav-h);
   background: var(--brown);
   border-radius: 25px 25px 25px 25px;
