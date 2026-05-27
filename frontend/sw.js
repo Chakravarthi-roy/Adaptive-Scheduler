@@ -68,36 +68,40 @@ self.addEventListener('push', e => {
 })
 
 self.addEventListener('notificationclick', e => {
-  const action = e.action
+  const action = e.action  // '' = body tapped, 'snooze' / 'dismiss_pre' / custom = button tapped
   const reminder_id = e.notification.data?.reminder_id
   const is_pre_alert = e.notification.data?.is_pre_alert || false
   e.notification.close()
 
   const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
 
-  // Snooze — works for both pre-alert and on-time
-  if (action === 'snooze' && reminder_id) {
-    e.waitUntil(
-      fetch(`${API_BASE}/reminders/${reminder_id}/snooze`, { method: 'POST' })
-        .catch(err => console.log('snooze failed:', err))
-    )
+  // Body tapped (no action button) — just open the app
+  if (!action) {
+    e.waitUntil(clients.openWindow(e.notification.data.url))
     return
   }
 
-  // Pre-alert dismiss — just close, do nothing
+  // Snooze button
+  if (action === 'snooze') {
+    if (reminder_id) {
+      e.waitUntil(
+        fetch(`${API_BASE}/reminders/${reminder_id}/snooze`, { method: 'POST' })
+          .catch(err => console.log('snooze failed:', err))
+      )
+    }
+    return
+  }
+
+  // Pre-alert OK dismiss — just close, nothing else
   if (action === 'dismiss_pre' || is_pre_alert) {
     return
   }
 
-  // On-time action (mark done / took it / etc.)
-  if (action && action !== 'snooze' && reminder_id) {
+  // Any other action button = mark done (took_it, started, doing, done, etc.)
+  if (reminder_id) {
     e.waitUntil(
       fetch(`${API_BASE}/reminders/${reminder_id}/done`, { method: 'PATCH' })
         .catch(err => console.log('mark done failed:', err))
     )
-    return
   }
-
-  // Default — open the app
-  e.waitUntil(clients.openWindow(e.notification.data.url))
 })

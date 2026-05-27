@@ -42,13 +42,12 @@ body {
   isolation: isolate;
 }
 
-/* side border lines — stop at nav top, not screen bottom */
+/* side border lines — full height, stop just above the floating nav */
 .app::before, .app::after {
   content: '';
   position: fixed;
   top: 0;
-  /* +30px accounts for the nav's border-radius so lines don't touch the curve */
-  bottom: calc(var(--nav-h));
+  bottom: calc(var(--nav-h) + var(--nav-gap) + 25px);
   width: 1px;
   background: rgba(221,161,94,0.28);
   z-index: 3;
