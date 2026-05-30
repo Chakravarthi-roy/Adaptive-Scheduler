@@ -106,9 +106,17 @@ TOOLS = [
                     "action_label": {
                         "type": "string",
                         "description": "A short, natural action button label shown when the reminder fires. Make it specific to the reminder — what the user will DO. E.g. 'Having lunch 🍜', 'Took it 💊', 'In the meeting 📅', 'Called her ✓', 'Submitted ✓'. Keep it under 5 words. No generic labels like 'Done' or 'OK'."
+                    },
+                    "pre_alert_minutes": {
+                        "type": "integer",
+                        "description": "Minutes before the reminder to send a heads-up notification. 0 means no pre-alert. Decide based on how much prep or travel the reminder needs."
+                    },
+                    "follow_up_minutes": {
+                        "type": "integer",
+                        "description": "Minutes after the reminder fires to send a follow-up check. 0 means no follow-up. Only set for action-oriented reminders where completion matters."
                     }
                 },
-                "required": ["title", "type", "repeat", "location", "participants", "action_label"]
+                "required": ["title", "type", "repeat", "location", "participants", "action_label", "pre_alert_minutes", "follow_up_minutes"]
             }
         }
     },
@@ -172,6 +180,21 @@ ACTION LABEL GUIDE — generate a short, specific action_label for the button sh
 - "submit report by 3pm" → "Submitted ✓"
 - "gym at 6am" → "At the gym 💪"
 - Keep it under 5 words, use an emoji if it fits naturally
+
+PRE-ALERT GUIDE — decide pre_alert_minutes based on prep/travel needed:
+- High stakes or needs preparation (exam, interview, doctor, flight) → 45-60
+- Regular scheduled event (meeting, class, appointment) → 20-30
+- Quick action, no prep needed (casual call, chat, simple task) → 0
+- Medication → 5
+- If the reminder is less than pre_alert_minutes away → set to 0
+- When in doubt, lean toward less — a pre-alert that fires too early is annoying
+
+FOLLOW-UP GUIDE — decide follow_up_minutes based on whether completion matters:
+- Send/submit/reply/complete tasks → 15-20
+- Medication → 10
+- Meetings/exams → set to expected duration if mentioned, else 60
+- Casual reminders, social things, simple one-second actions → 0
+- When in doubt, set to 0 — follow-ups should only come for things that could be forgotten
 
 REMINDER TYPE GUIDE — choose the type that fits naturally, not rigidly:
 - "meeting": scheduled appointments, calls, interviews, classes, events with others that have a fixed start time and benefit from a heads-up
@@ -335,6 +358,8 @@ def save_reminder(data: dict):
             repeat=data.get("repeat", "none"),
             participants=json.dumps(data.get("participants", [])),
             action_label=data.get("action_label") or None,
+            pre_alert_minutes=data.get("pre_alert_minutes") if data.get("pre_alert_minutes") else None,
+            follow_up_minutes=data.get("follow_up_minutes") if data.get("follow_up_minutes") else None,
             done=False
         )
         db.add(reminder)

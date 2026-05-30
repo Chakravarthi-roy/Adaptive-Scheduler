@@ -26,7 +26,9 @@ class Reminder(Base):
     notified = Column(Boolean, default=False)
     pre_alerted = Column(Boolean, default=False)
     follow_up_sent = Column(Boolean, default=False)
-    action_label = Column(String, nullable=True)  # e.g. 'Ate it 🍽️', 'Done ✓'
+    action_label = Column(String, nullable=True)       # e.g. 'Ate it 🍽️', 'Done ✓'
+    pre_alert_minutes = Column(String, nullable=True)  # None = no pre-alert, int = minutes before
+    follow_up_minutes = Column(String, nullable=True)  # None = no follow-up, int = minutes after
 
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"

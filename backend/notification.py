@@ -116,6 +116,18 @@ def build_notification(reminder, is_pre_alert=False):
         "sound": True
     }
 
+def build_followup_notification(reminder):
+    """Simple follow-up nudge — did you do it?"""
+    return {
+        "title": f"Did you do it? 🔔",
+        "body": reminder.title,
+        "action": "done",
+        "action_label": "Yes, done ✓",
+        "persistent": False,
+        "sound": True,
+        "is_pre_alert": False
+    }
+
 def send_notification(title, body, persistent=False, action=None, action_label=None, reminder_id=None, is_pre_alert=False, vibrate=True):
     db = SessionLocal()
     try:

@@ -5,12 +5,13 @@ from notification import send_notification
 
 IST = pytz.timezone('Asia/Kolkata')
 
-# ─── Pre-alert config by type ─────────────────────────────────────────────────
-PRE_ALERT_MINUTES = {
-    "medication": 1,
-    "meeting":    30,
-    "task":       20,
-    "casual":     0   # on time, no pre-alert
+# Pre-alert and follow-up are now stored per-reminder (set by agent)
+# These are fallback defaults only for reminders created before this change
+FALLBACK_PRE_ALERT = {
+    "medication": 5,
+    "meeting":    20,
+    "task":       15,
+    "casual":     0
 }
 
 # ─── Fallback button labels (used when no custom label stored on reminder) ────
@@ -125,37 +126,48 @@ def check_reminders():
         pre_alerted_count = 0
         notified_count = 0
 
-        # ── 1. Check pre-alerts ───────────────────────────────────────────────
-        for reminder_type, minutes in PRE_ALERT_MINUTES.items():
+        # ── 1. Check pre-alerts (dynamic per-reminder) ──────────────────────
+        # fetch all unnotified, un-pre-alerted reminders with a datetime set
+        candidates = db.query(Reminder).filter(
+            Reminder.done == False,
+            Reminder.notified == False,
+            Reminder.pre_alerted == False,
+            Reminder.datetime != None
+        ).all()
+
+        for reminder in candidates:
+            # get pre_alert_minutes — use stored value, fallback to type default
+            stored = getattr(reminder, 'pre_alert_minutes', None)
+            if stored is not None:
+                try:
+                    minutes = int(stored)
+                except:
+                    minutes = 0
+            else:
+                minutes = FALLBACK_PRE_ALERT.get(reminder.type, 0)
+
             if minutes == 0:
-                continue  # casual — no pre-alert
+                continue
 
             pre_alert_window_start = window_start + timedelta(minutes=minutes)
-            pre_alert_window_end = window_end + timedelta(minutes=minutes)
+            pre_alert_window_end   = window_end   + timedelta(minutes=minutes)
 
-            due_pre = db.query(Reminder).filter(
-                Reminder.done == False,
-                Reminder.notified == False,
-                Reminder.pre_alerted == False,
-                Reminder.type == reminder_type,
-                Reminder.datetime >= pre_alert_window_start,
-                Reminder.datetime <= pre_alert_window_end
-            ).all()
+            if not (pre_alert_window_start <= reminder.datetime <= pre_alert_window_end):
+                continue
 
-            for reminder in due_pre:
-                notif = build_notification(reminder, is_pre_alert=True)
-                result = send_notification(
-                    notif["title"],
-                    notif["body"],
-                    notif["persistent"],
-                    action=notif["action"],
-                    action_label=notif["action_label"],
-                    reminder_id=reminder.id,
-                    is_pre_alert=True
-                )
-                if result.get("status") == "sent":
-                    reminder.pre_alerted = True
-                    pre_alerted_count += 1
+            notif = build_notification(reminder, is_pre_alert=True)
+            result = send_notification(
+                notif["title"],
+                notif["body"],
+                notif["persistent"],
+                action=notif["action"],
+                action_label=notif["action_label"],
+                reminder_id=reminder.id,
+                is_pre_alert=True
+            )
+            if result.get("status") == "sent":
+                reminder.pre_alerted = True
+                pre_alerted_count += 1
 
         # ── 2. Check on-time notifications — catch overdue too ───────────────
         due = db.query(Reminder).filter(
@@ -189,8 +201,47 @@ def check_reminders():
                     reminder.notified = False
                     reminder.pre_alerted = False
 
+        # ── 3. Check follow-ups ───────────────────────────────────────────────
+        followup_count = 0
+        followup_candidates = db.query(Reminder).filter(
+            Reminder.done == False,
+            Reminder.notified == True,
+            Reminder.follow_up_sent == False,
+            Reminder.datetime != None
+        ).all()
+
+        for reminder in followup_candidates:
+            stored = getattr(reminder, 'follow_up_minutes', None)
+            if stored is None:
+                continue
+            try:
+                fu_minutes = int(stored)
+            except:
+                continue
+            if fu_minutes == 0:
+                continue
+
+            followup_time = reminder.datetime + timedelta(minutes=fu_minutes)
+            if not (window_start <= followup_time <= window_end):
+                continue
+
+            from notification import build_followup_notification
+            notif = build_followup_notification(reminder)
+            result = send_notification(
+                notif["title"],
+                notif["body"],
+                notif["persistent"],
+                action=notif["action"],
+                action_label=notif["action_label"],
+                reminder_id=reminder.id,
+                is_pre_alert=False
+            )
+            if result.get("status") == "sent":
+                reminder.follow_up_sent = True
+                followup_count += 1
+
         db.commit()
-        print(f"[{now.strftime('%H:%M:%S')}] checked — {pre_alerted_count} pre-alerts, {notified_count} fired")
+        print(f"[{now.strftime('%H:%M:%S')}] checked — {pre_alerted_count} pre-alerts, {notified_count} fired, {followup_count} follow-ups")
 
     finally:
         db.close()
