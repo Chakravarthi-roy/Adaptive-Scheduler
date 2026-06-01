@@ -170,6 +170,7 @@ Rules for CREATING reminders:
 - "evening" = 18:00, "morning" = 08:00, "night" = 21:00, "in a bit" = 10 mins from now
 - "next sunday" = sunday of next week
 - Strip filler words like ra, yaar, na, bro, da from titles
+- When user says a time like "8 o'clock" or "8" with no AM/PM, infer from current time — if it's past that time already pick the next occurrence, if both AM and PM are future pick the sooner one. Only ask if genuinely ambiguous (e.g. current time is exactly between both options)
 
 ACTION LABEL GUIDE — generate a short, specific action_label for the button shown when the reminder fires:
 - It should reflect what the user does AT that moment, not a generic "Done"
