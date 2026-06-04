@@ -197,7 +197,7 @@ You have access to five tools:
 WORKFLOW:
 1. First, always call get_reminders to see what reminders exist
 2. If user wants to create: extract everything you can, infer what you can, create immediately — only ask if the time/date is completely missing and cannot be inferred
-3. If user wants to edit/move/reschedule/change: find the reminder by ID from get_reminders, then call update_reminder
+3. If user wants to edit/move/reschedule/change/update/modify any reminder: call get_reminders first, find the matching reminder by title or context, then call update_reminder with the ID and only the fields that changed. You can update multiple fields at once (e.g. time AND location together)
 4. NEVER ask for location, participants, or other optional fields — leave them empty if not mentioned
 5. If user wants to delete: find the reminder ID first, then call delete_reminder
 6. Be concise and conversational — one short confirmation message after acting, nothing more
@@ -374,19 +374,23 @@ Always respond with ONLY valid JSON, no other text."""
 
             elif action == "update_reminder":
                 reminder_id = action_data.get("id")
-                reminder = db.query(Reminder).filter(Reminder.id == str(reminder_id)).first()
-                if reminder:
-                    if action_data.get("title"):    reminder.title    = action_data["title"]
-                    if action_data.get("datetime"): reminder.datetime = datetime.fromisoformat(action_data["datetime"])
-                    if action_data.get("pre_alert_minutes") is not None:
-                        reminder.pre_alert_minutes = str(action_data["pre_alert_minutes"])
-                    if action_data.get("follow_up_minutes") is not None:
-                        reminder.follow_up_minutes = str(action_data["follow_up_minutes"])
-                    # reset notification flags so it fires again at new time
-                    reminder.notified       = False
-                    reminder.pre_alerted    = False
-                    reminder.follow_up_sent = False
-                    db.commit()
+                _db = SessionLocal()
+                try:
+                    reminder = _db.query(Reminder).filter(Reminder.id == str(reminder_id)).first()
+                    if reminder:
+                        if action_data.get("title"):    reminder.title    = action_data["title"]
+                        if action_data.get("datetime"): reminder.datetime = datetime.fromisoformat(action_data["datetime"])
+                        if action_data.get("location"): reminder.location = action_data["location"]
+                        if action_data.get("pre_alert_minutes") is not None:
+                            reminder.pre_alert_minutes = str(action_data["pre_alert_minutes"])
+                        if action_data.get("follow_up_minutes") is not None:
+                            reminder.follow_up_minutes = str(action_data["follow_up_minutes"])
+                        reminder.notified       = False
+                        reminder.pre_alerted    = False
+                        reminder.follow_up_sent = False
+                        _db.commit()
+                finally:
+                    _db.close()
                 return {
                     "type": "updated",
                     "text": action_data.get("confirmation", "Reminder updated"),

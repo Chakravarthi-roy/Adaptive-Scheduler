@@ -177,13 +177,10 @@ async function handleAudioInput(audioBlob) {
 }
 
 async function handleTextInput(text) {
-  // cancel detection — reset if user says cancel/stop/nevermind
+  // cancel detection — reset everything if user says cancel/stop/nevermind
   const cancelWords = ['cancel', 'stop', 'never mind', 'nevermind', 'forget it', 'nope', 'abort']
   if (cancelWords.some(w => text.toLowerCase().includes(w)) && agentMessages.length > 0) {
-    agentMessages = []
-    awaitingReply = false
-    addBubble(text, 'user')
-    addBubble('Cancelled. What would you like to do?', 'agent')
+    resetConversation()
     setMicState('idle')
     return
   }
