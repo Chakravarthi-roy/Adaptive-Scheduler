@@ -177,6 +177,17 @@ async function handleAudioInput(audioBlob) {
 }
 
 async function handleTextInput(text) {
+  // cancel detection — reset if user says cancel/stop/nevermind
+  const cancelWords = ['cancel', 'stop', 'never mind', 'nevermind', 'forget it', 'nope', 'abort']
+  if (cancelWords.some(w => text.toLowerCase().includes(w)) && agentMessages.length > 0) {
+    agentMessages = []
+    awaitingReply = false
+    addBubble(text, 'user')
+    addBubble('Cancelled. What would you like to do?', 'agent')
+    setMicState('idle')
+    return
+  }
+
   addBubble(text, 'user')
   // prepend settings context to first user message so agent knows time preferences
   const msgContent = agentMessages.length === 0
@@ -207,6 +218,13 @@ async function handleTextInput(text) {
       awaitingReply = false
       setMicState('idle')
       showConfirmModal(result.data)
+
+    } else if (result.type === 'updated') {
+      awaitingReply = false
+      addBubble(result.text, 'agent')
+      setMicState('idle')
+      loadReminders()
+      setTimeout(resetConversation, 1800)
 
     } else if (result.type === 'deleted') {
       awaitingReply = false
@@ -529,7 +547,14 @@ setInterval(updateClock, 1000)
 // Build a settings context string to inject into agent messages
 function buildSettingsContext() {
   const s = loadSettings()
-  return `[User preferences: timezone=${s.timezone}, "morning"=${s.morning}, "evening"=${s.evening}, "night"=${s.night}, "in a bit"=${s.inABit} minutes, "after a while"=${s.afterAWhile} minutes]`
+  const tz = s.timezone || 'Asia/Kolkata'
+  const now = new Date()
+  const currentDateTime = now.toLocaleString('en-US', {
+    timeZone: tz,
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true
+  })
+  return `[Current time: ${currentDateTime} | User preferences: timezone=${tz}, "morning"=${s.morning}, "evening"=${s.evening}, "night"=${s.night}, "in a bit"=${s.inABit} minutes, "after a while"=${s.afterAWhile} minutes]`
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────

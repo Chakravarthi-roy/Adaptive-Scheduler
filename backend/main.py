@@ -123,6 +123,43 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "update_reminder",
+            "description": "Update an existing reminder. Use when user wants to move, reschedule, rename, or change any detail. Always call get_reminders first to get the correct ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "The ID of the reminder to update"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "New title if changing"
+                    },
+                    "datetime": {
+                        "type": "string",
+                        "description": "New datetime ISO format YYYY-MM-DDTHH:MM:00 if changing"
+                    },
+                    "pre_alert_minutes": {
+                        "type": "integer",
+                        "description": "Updated pre-alert minutes if needed"
+                    },
+                    "follow_up_minutes": {
+                        "type": "integer",
+                        "description": "Updated follow-up minutes if needed"
+                    },
+                    "confirmation": {
+                        "type": "string",
+                        "description": "Short human-readable confirmation e.g. 'Moved your meeting to 6pm'"
+                    }
+                },
+                "required": ["id", "confirmation"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "delete_reminder",
             "description": "Delete one or more reminders by their IDs. Always call get_reminders first to find the correct reminder ID(s). If multiple reminders match, ask the user to clarify which one.",
             "parameters": {
@@ -144,21 +181,26 @@ TOOLS = [
     }
 ]
 
-SYSTEM_PROMPT = """You are a smart reminder assistant that helps users create and manage reminders via voice or text.
+SYSTEM_PROMPT = """You are Nudge — a smart, context-aware personal reminder assistant. You think ahead, adapt to the situation, and act like a reliable human assistant who understands what the user actually needs — not just what they literally said.
+
+You are proactive, not robotic. You infer, adapt, and decide intelligently rather than asking unnecessary questions. You understand natural speech, casual language, and incomplete sentences.
 
 IMPORTANT: You must use the available tools to help the user. Always respond with tool calls, not just text.
 
-You have access to four tools:
+You have access to five tools:
 1. get_reminders — see the user's existing schedule (call this first for any request)
-2. ask_user — ask ONE clarifying question when information is missing
+2. ask_user — ask ONE clarifying question only when truly essential (missing time/date that cannot be inferred)
 3. create_reminder — create a new reminder with all required fields
-4. delete_reminder — delete reminders by ID
+4. update_reminder — update an existing reminder's title, time, or other fields
+5. delete_reminder — delete reminders by ID
 
 WORKFLOW:
 1. First, always call get_reminders to see what reminders exist
-2. If user wants to create: extract info, ask clarifying questions if needed, then call create_reminder
-3. If user wants to delete: find the reminder ID first, then call delete_reminder
-4. Be concise and conversational
+2. If user wants to create: extract everything you can, infer what you can, create immediately — only ask if the time/date is completely missing and cannot be inferred
+3. If user wants to edit/move/reschedule/change: find the reminder by ID from get_reminders, then call update_reminder
+4. NEVER ask for location, participants, or other optional fields — leave them empty if not mentioned
+5. If user wants to delete: find the reminder ID first, then call delete_reminder
+6. Be concise and conversational — one short confirmation message after acting, nothing more
 
 Rules for CREATING reminders:
 - Extract title, type, repeat, location, participants from user input
@@ -182,13 +224,12 @@ ACTION LABEL GUIDE — generate a short, specific action_label for the button sh
 - "gym at 6am" → "At the gym 💪"
 - Keep it under 5 words, use an emoji if it fits naturally
 
-PRE-ALERT GUIDE — decide pre_alert_minutes based on prep/travel needed:
-- High stakes or needs preparation (exam, interview, doctor, flight) → 45-60
-- Regular scheduled event (meeting, class, appointment) → 20-30
-- Quick action, no prep needed (casual call, chat, simple task) → 0
-- Medication → 5
-- If the reminder is less than pre_alert_minutes away → set to 0
-- When in doubt, lean toward less — a pre-alert that fires too early is annoying
+PRE-ALERT GUIDE — decide pre_alert_minutes based on context and how much time is available:
+- Think about how much heads-up this person actually needs for this specific reminder
+- Consider the importance, prep needed, travel involved, and how much time is left until the reminder
+- Always set a meaningful pre_alert_minutes — adapt to the available time, never skip just because the ideal window has passed
+- Casual/social reminders with no prep needed → 0
+- Keep pre_alert_minutes between 2 and 60 — never go outside this range
 
 FOLLOW-UP GUIDE — decide follow_up_minutes based on whether completion matters:
 - Send/submit/reply/complete tasks → 15-20
@@ -286,6 +327,7 @@ RESPOND ONLY WITH JSON in this format:
 {{"action": "get_reminders"}} - to see existing reminders
 {{"action": "ask_user", "question": "Your question here"}} - to ask user for info
 {{"action": "create_reminder", "title": "...", "datetime": "...", "location": "...", "type": "...", "repeat": "...", "participants": [], "action_label": "..."}}
+{{"action": "update_reminder", "id": "...", "datetime": "...", "title": "...", "confirmation": "..."}}
 {{"action": "delete_reminder", "ids": [...], "confirmation": "..."}}
 
 Always respond with ONLY valid JSON, no other text."""
@@ -327,6 +369,27 @@ Always respond with ONLY valid JSON, no other text."""
                 return {
                     "type": "reminder",
                     "data": action_data,
+                    "messages": full_messages
+                }
+
+            elif action == "update_reminder":
+                reminder_id = action_data.get("id")
+                reminder = db.query(Reminder).filter(Reminder.id == str(reminder_id)).first()
+                if reminder:
+                    if action_data.get("title"):    reminder.title    = action_data["title"]
+                    if action_data.get("datetime"): reminder.datetime = datetime.fromisoformat(action_data["datetime"])
+                    if action_data.get("pre_alert_minutes") is not None:
+                        reminder.pre_alert_minutes = str(action_data["pre_alert_minutes"])
+                    if action_data.get("follow_up_minutes") is not None:
+                        reminder.follow_up_minutes = str(action_data["follow_up_minutes"])
+                    # reset notification flags so it fires again at new time
+                    reminder.notified       = False
+                    reminder.pre_alerted    = False
+                    reminder.follow_up_sent = False
+                    db.commit()
+                return {
+                    "type": "updated",
+                    "text": action_data.get("confirmation", "Reminder updated"),
                     "messages": full_messages
                 }
 
