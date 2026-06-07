@@ -44,7 +44,8 @@ def get_reminders():
                 "type": r.type,
                 "repeat": r.repeat,
                 "participants": json.loads(r.participants) if r.participants else [],
-                "done": r.done
+                "done": r.done,
+                "missed": r.missed if hasattr(r, "missed") else False
             }
             for r in reminders
         ]
@@ -73,10 +74,24 @@ def mark_done(reminder_id: str):
     db = SessionLocal()
     try:
         reminder = db.query(Reminder).filter(Reminder.id == reminder_id).first()
-        if reminder:
+        if not reminder:
+            return {"status": "not found"}
+
+        if reminder.repeat == "daily" and reminder.datetime:
+            # don't mark done — push to next day and reset flags
+            reminder.datetime       = reminder.datetime + timedelta(days=1)
+            reminder.notified       = False
+            reminder.pre_alerted    = False
+            reminder.follow_up_sent = False
+        elif reminder.repeat == "weekly" and reminder.datetime:
+            reminder.datetime       = reminder.datetime + timedelta(weeks=1)
+            reminder.notified       = False
+            reminder.pre_alerted    = False
+            reminder.follow_up_sent = False
+        else:
             reminder.done = True
-            db.commit()
-            return {"status": "marked done"}
-        return {"status": "not found"}
+
+        db.commit()
+        return {"status": "marked done"}
     finally:
         db.close()

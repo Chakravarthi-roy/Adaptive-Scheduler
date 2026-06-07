@@ -345,7 +345,7 @@ async function loadReminders() {
 
 function filterReminders(reminders) {
   if (currentView === 'reminders') return reminders.filter(r => !r.done)
-  if (currentView === 'recurring')  return reminders.filter(r => !r.done && r.repeat !== 'none')
+  if (currentView === 'missed')     return reminders.filter(r => r.missed && !r.done)
   if (currentView === 'done')       return reminders.filter(r => r.done === true)
   return reminders
 }
@@ -364,7 +364,7 @@ function renderReminders(allReminders) {
   if (reminders.length === 0) {
     const labels = {
       reminders: 'No active reminders yet',
-      recurring:  'No recurring reminders',
+      missed:     'No missed reminders',
       done:       'Nothing marked done yet'
     }
     area.innerHTML = `
@@ -429,7 +429,7 @@ function switchView(view) {
   if (activeBtn) activeBtn.classList.add('active')
 
   // Update page title
-  const titles = { reminders: 'Reminders', recurring: 'Recurring', done: 'Done', settings: 'Settings' }
+  const titles = { reminders: 'Reminders', missed: 'Missed', done: 'Done', settings: 'Settings' }
   document.getElementById('page-title').textContent = titles[view] || view
 
   // Show/hide panels

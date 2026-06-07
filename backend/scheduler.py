@@ -201,7 +201,37 @@ def check_reminders():
                     reminder.notified = False
                     reminder.pre_alerted = False
 
-        # ── 3. Check follow-ups ───────────────────────────────────────────────
+        # ── 3. Check missed — notified but no action after 60 min ──────────
+        missed_count = 0
+        missed_candidates = db.query(Reminder).filter(
+            Reminder.done == False,
+            Reminder.missed == False,
+            Reminder.notified == True,
+            Reminder.datetime != None
+        ).all()
+
+        for reminder in missed_candidates:
+            # skip if follow_up hasn't fired yet — let follow-up handle it first
+            if reminder.follow_up_minutes and not reminder.follow_up_sent:
+                continue
+            missed_threshold = reminder.datetime + timedelta(minutes=60)
+            if now >= missed_threshold:
+                reminder.missed = True
+                missed_count += 1
+                # re-fire as missed notification
+                send_notification(
+                    f"Missed: {reminder.title}",
+                    "You didn't action this reminder",
+                    persistent=True,
+                    action=reminder.action_label or "done",
+                    action_label="Done now ✓",
+                    reminder_id=reminder.id,
+                    is_pre_alert=False
+                )
+        if missed_count:
+            db.commit()
+
+        # ── 4. Check follow-ups ───────────────────────────────────────────────
         followup_count = 0
         followup_candidates = db.query(Reminder).filter(
             Reminder.done == False,
