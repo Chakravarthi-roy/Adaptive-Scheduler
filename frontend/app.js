@@ -245,7 +245,10 @@ async function handleTextInput(text) {
 }
 
 // ─── Confirm Modal ────────────────────────────────────────────────────────────
+let _pendingExtracted = null
+
 function showConfirmModal(extracted) {
+  _pendingExtracted = extracted  // keep full agent data — action_label, pre_alert_minutes, follow_up_minutes, participants
   document.getElementById('field-title').value    = extracted.title    || ''
   document.getElementById('field-location').value = extracted.location || ''
   document.getElementById('field-type').value     = extracted.type     || 'casual'
@@ -272,11 +275,14 @@ btnSave.addEventListener('click', async () => {
 
   const reminder = {
     title,
-    datetime:     document.getElementById('field-datetime').value || null,
-    location:     document.getElementById('field-location').value || null,
-    type:         document.getElementById('field-type').value,
-    repeat:       document.getElementById('field-repeat').value,
-    participants: []
+    datetime:           document.getElementById('field-datetime').value || null,
+    location:           document.getElementById('field-location').value || null,
+    type:               document.getElementById('field-type').value,
+    repeat:             document.getElementById('field-repeat').value,
+    participants:       _pendingExtracted?.participants || [],
+    action_label:       _pendingExtracted?.action_label || null,
+    pre_alert_minutes:  _pendingExtracted?.pre_alert_minutes ?? null,
+    follow_up_minutes:  _pendingExtracted?.follow_up_minutes ?? null
   }
 
   try {
@@ -344,7 +350,7 @@ async function loadReminders() {
 }
 
 function filterReminders(reminders) {
-  if (currentView === 'reminders') return reminders.filter(r => !r.done)
+  if (currentView === 'reminders') return reminders.filter(r => !r.done && !r.missed)
   if (currentView === 'missed')     return reminders.filter(r => r.missed && !r.done)
   if (currentView === 'done')       return reminders.filter(r => r.done === true)
   return reminders
@@ -403,7 +409,7 @@ function renderReminders(allReminders) {
       <div class="card-actions">
         <span class="tag tag-${r.type}">${r.type}</span>
         ${r.repeat !== 'none' ? `<span class="tag tag-rec">${r.repeat}</span>` : ''}
-        ${!r.done ? `
+        ${!r.done && currentView !== 'missed' ? `
           <button class="done-btn" onclick="markDone('${r.id}')" title="Mark done">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"/>
