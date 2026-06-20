@@ -19,7 +19,7 @@ class Reminder(Base):
     title = Column(String, nullable=False)
     datetime = Column(DateTime, nullable=True)
     location = Column(String, nullable=True)
-    type = Column(String, default="casual")
+    type = Column(String, default="personal")
     repeat = Column(String, default="none")
     participants = Column(Text, default="[]")
     done = Column(Boolean, default=False)

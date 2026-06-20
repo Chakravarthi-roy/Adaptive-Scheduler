@@ -251,10 +251,12 @@ function showConfirmModal(extracted) {
   _pendingExtracted = extracted  // keep full agent data — action_label, pre_alert_minutes, follow_up_minutes, participants
   document.getElementById('field-title').value    = extracted.title    || ''
   document.getElementById('field-location').value = extracted.location || ''
-  document.getElementById('field-type').value     = extracted.type     || 'casual'
+  document.getElementById('field-type').value     = extracted.type     || 'personal'
   document.getElementById('field-repeat').value   = extracted.repeat   || 'none'
   document.getElementById('field-datetime').value = extracted.datetime
     ? extracted.datetime.slice(0, 16) : ''
+  document.getElementById('field-pre-alert').value = extracted.pre_alert_minutes ?? ''
+  document.getElementById('field-follow-up').value = extracted.follow_up_minutes ?? ''
   overlay.classList.add('show')
 }
 
@@ -281,8 +283,8 @@ btnSave.addEventListener('click', async () => {
     repeat:             document.getElementById('field-repeat').value,
     participants:       _pendingExtracted?.participants || [],
     action_label:       _pendingExtracted?.action_label || null,
-    pre_alert_minutes:  _pendingExtracted?.pre_alert_minutes ?? null,
-    follow_up_minutes:  _pendingExtracted?.follow_up_minutes ?? null
+    pre_alert_minutes:  document.getElementById('field-pre-alert').value !== '' ? parseInt(document.getElementById('field-pre-alert').value) : null,
+    follow_up_minutes:  document.getElementById('field-follow-up').value !== '' ? parseInt(document.getElementById('field-follow-up').value) : null
   }
 
   try {
@@ -357,7 +359,7 @@ function filterReminders(reminders) {
 }
 
 const typeColors = {
-  meeting: '#0081a7', medication: '#0a5c44', task: '#c4501e', casual: '#a89a8a'
+  important: '#c4501e', health: '#0a5c44', routine: '#0081a7', personal: '#a89a8a'
 }
 
 function renderReminders(allReminders) {

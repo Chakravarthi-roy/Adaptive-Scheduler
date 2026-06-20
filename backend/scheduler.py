@@ -5,115 +5,56 @@ from notification import send_notification
 
 IST = pytz.timezone('Asia/Kolkata')
 
-# Pre-alert and follow-up are now stored per-reminder (set by agent)
-# These are fallback defaults only for reminders created before this change
+# Pre-alert fallback for reminders created before dynamic timing existed
 FALLBACK_PRE_ALERT = {
-    "medication": 5,
-    "meeting":    20,
-    "task":       15,
-    "casual":     0
+    "important": 20,
+    "health":    5,
+    "routine":   10,
+    "personal":  0
 }
 
-# ─── Fallback button labels (used when no custom label stored on reminder) ────
-_DEFAULT_LABELS = {
-    "medication": {"action": "took_it",  "label": "Took it 💊"},
-    "meeting":    {"action": "started",  "label": "Started 📅"},
-    "task":       {"action": "doing",    "label": "Doing it ✓"},
-    "casual":     {"action": "done",     "label": "Done ✓"},
+# Emoji + generic fallback action label per type (used only if agent didn't set a custom action_label)
+_TYPE_META = {
+    "important": {"emoji": "❗", "action": "done",  "label": "Done ✓"},
+    "health":    {"emoji": "💊", "action": "done",  "label": "Done ✓"},
+    "routine":   {"emoji": "🔁", "action": "done",  "label": "Done ✓"},
+    "personal":  {"emoji": "🔔", "action": "done",  "label": "Done ✓"},
 }
 
 def get_action_config(reminder):
     custom = getattr(reminder, "action_label", None)
-    default = _DEFAULT_LABELS.get(reminder.type, _DEFAULT_LABELS["casual"])
-    label = custom if custom else default["label"]
-    return default["action"], label
+    meta = _TYPE_META.get(reminder.type, _TYPE_META["personal"])
+    label = custom if custom else meta["label"]
+    return meta["action"], label
 
-# ─── Notification content by type ────────────────────────────────────────────
+# ─── Notification content — generic, works for any type ──────────────────────
 def build_notification(reminder, is_pre_alert=False):
     title = reminder.title
     time_str = reminder.datetime.strftime("%I:%M %p")
     location_str = f" · {reminder.location}" if reminder.location else ""
     action, action_label = get_action_config(reminder)
-    persistent = reminder.type == "medication"
+    meta = _TYPE_META.get(reminder.type, _TYPE_META["personal"])
+    persistent = reminder.type == "health"
 
     if is_pre_alert:
-        minutes = PRE_ALERT_MINUTES[reminder.type]
-        if reminder.type == "medication":
-            return {
-                "title": f"💊 {title} in {minutes} min",
-                "body": f"Get your medication ready · {time_str}",
-                "action": action,
-                "action_label": action_label,
-                "persistent": persistent,
-                "sound": True
-            }
-        elif reminder.type == "meeting":
-            return {
-                "title": f"📅 {title} in {minutes} mins",
-                "body": f"Meeting coming up at {time_str}{location_str}",
-                "action": action,
-                "action_label": action_label,
-                "persistent": persistent,
-                "sound": True
-            }
-        elif reminder.type == "task":
-            return {
-                "title": f"📝 {title} in {minutes} mins",
-                "body": f"Starting at {time_str}{location_str}",
-                "action": action,
-                "action_label": action_label,
-                "persistent": persistent,
-                "sound": True
-            }
-        else:  # casual — no pre-alert
-            return None
+        minutes = int(reminder.pre_alert_minutes) if reminder.pre_alert_minutes else FALLBACK_PRE_ALERT.get(reminder.type, 0)
+        return {
+            "title": f"{meta['emoji']} {title} in {minutes} min",
+            "body": f"Coming up at {time_str}{location_str}",
+            "action": action,
+            "action_label": action_label,
+            "persistent": persistent,
+            "sound": True
+        }
     else:
-        # on-time notification
-        if reminder.type == "medication":
-            return {
-                "title": f"💊 {title}",
-                "body": f"Time to take your medication · {time_str}",
-                "action": action,
-                "action_label": action_label,
-                "persistent": persistent,
-                "sound": True
-            }
-        elif reminder.type == "meeting":
-            return {
-                "title": f"📅 {title}",
-                "body": f"Your meeting is now · {time_str}{location_str}",
-                "action": action,
-                "action_label": action_label,
-                "persistent": persistent,
-                "sound": True
-            }
-        elif reminder.type == "task":
-            return {
-                "title": f"📝 {title}",
-                "body": f"Time to start · {time_str}{location_str}",
-                "action": action,
-                "action_label": action_label,
-                "persistent": persistent,
-                "sound": True
-            }
-        elif reminder.type == "casual":
-            return {
-                "title": f"🔔 {title}",
-                "body": time_str,
-                "action": action,
-                "action_label": action_label,
-                "persistent": persistent,
-                "sound": True
-            }
-
-    return {
-        "title": f"🔔 {title}",
-        "body": time_str,
-        "action": action,
-        "action_label": action_label,
-        "persistent": persistent,
-        "sound": True
-    }
+        return {
+            "title": f"{meta['emoji']} {title}",
+            "body": f"Now · {time_str}{location_str}" if reminder.location else time_str,
+            "action": action,
+            "action_label": action_label,
+            "persistent": persistent,
+            "sound": True
+        }
 
 
 def check_reminders():

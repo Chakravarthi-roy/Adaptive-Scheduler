@@ -215,10 +215,10 @@ body {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.card[data-type="meeting"]    { border-left-color: var(--brown); }
-.card[data-type="medication"] { border-left-color: var(--sage); }
-.card[data-type="task"]       { border-left-color: #b5835a; }
-.card[data-type="casual"]     { border-left-color: var(--mint); }
+.card[data-type="important"] { border-left-color: #b5835a; }
+.card[data-type="health"]    { border-left-color: var(--sage); }
+.card[data-type="routine"]   { border-left-color: var(--brown); }
+.card[data-type="personal"]  { border-left-color: var(--mint); }
 
 .cdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; align-self: flex-start; margin-top: 5px; }
 .cbody { flex: 1; min-width: 0; }
@@ -248,10 +248,10 @@ body {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.tag-meeting    { background: rgba(221,161,94,0.18); color: #9a6230; }
-.tag-medication { background: rgba(204,213,174,0.4); color: #5a6a3a; }
-.tag-task       { background: rgba(181,131,90,0.15); color: #7a4e20; }
-.tag-casual     { background: var(--mint); color: var(--muted); }
+.tag-important  { background: rgba(181,131,90,0.18); color: #7a4e20; }
+.tag-health     { background: rgba(204,213,174,0.4);  color: #5a6a3a; }
+.tag-routine    { background: rgba(221,161,94,0.18);  color: #9a6230; }
+.tag-personal   { background: var(--mint); color: var(--muted); }
 .tag-rec        { background: var(--cream); color: var(--muted); border: 1px solid var(--border); }
 
 .done-btn {

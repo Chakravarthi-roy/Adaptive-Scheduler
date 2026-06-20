@@ -264,10 +264,10 @@
         <div class="field">
           <label>Type</label>
           <select id="field-type">
-            <option value="meeting">Meeting</option>
-            <option value="medication">Medication</option>
-            <option value="task">Task</option>
-            <option value="casual">Casual</option>
+            <option value="important">Important</option>
+            <option value="health">Health</option>
+            <option value="routine">Routine</option>
+            <option value="personal">Personal</option>
           </select>
         </div>
         <div class="field">
@@ -277,6 +277,16 @@
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
           </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Pre-alert</label>
+          <input type="number" id="field-pre-alert" min="0" max="120" placeholder="min before" />
+        </div>
+        <div class="field">
+          <label>Follow-up</label>
+          <input type="number" id="field-follow-up" min="0" max="120" placeholder="min after" />
         </div>
       </div>
       <div class="modal-actions">

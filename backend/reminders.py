@@ -15,7 +15,7 @@ def save_reminder(data: dict):
             title=data.get("title", ""),
             datetime=datetime.fromisoformat(data["datetime"]) if data.get("datetime") else None,
             location=data.get("location"),
-            type=data.get("type", "casual"),
+            type=data.get("type", "personal"),
             repeat=data.get("repeat", "none"),
             participants=json.dumps(data.get("participants", [])),
             action_label=data.get("action_label") or None,
