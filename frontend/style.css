@@ -218,7 +218,8 @@ body {
 .card[data-type="important"] { border-left-color: #b5835a; }
 .card[data-type="health"]    { border-left-color: var(--sage); }
 .card[data-type="routine"]   { border-left-color: var(--brown); }
-.card[data-type="personal"]  { border-left-color: var(--mint); }
+.card[data-type="personal"]  { border-left-color: #6b4f8a; }
+.card[data-type="casual"]    { border-left-color: var(--mint); }
 
 .cdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; align-self: flex-start; margin-top: 5px; }
 .cbody { flex: 1; min-width: 0; }
@@ -251,7 +252,8 @@ body {
 .tag-important  { background: rgba(181,131,90,0.18); color: #7a4e20; }
 .tag-health     { background: rgba(204,213,174,0.4);  color: #5a6a3a; }
 .tag-routine    { background: rgba(221,161,94,0.18);  color: #9a6230; }
-.tag-personal   { background: var(--mint); color: var(--muted); }
+.tag-personal   { background: rgba(107,79,138,0.15);  color: #6b4f8a; }
+.tag-casual     { background: var(--mint); color: var(--muted); }
 .tag-rec        { background: var(--cream); color: var(--muted); border: 1px solid var(--border); }
 
 .done-btn {

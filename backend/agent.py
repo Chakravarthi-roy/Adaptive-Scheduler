@@ -42,7 +42,7 @@ TOOLS = [
                     "title":             {"type": "string", "description": "Short, clean title. Strip filler words like ra, yaar, na, bro, da."},
                     "datetime":          {"type": "string", "description": "ISO format datetime YYYY-MM-DDTHH:MM:00 or empty string if not applicable"},
                     "location":          {"type": "string", "description": "Location or empty string if none"},
-                    "type":              {"type": "string", "enum": ["important", "health", "routine", "personal"]},
+                    "type":              {"type": "string", "enum": ["important", "health", "routine", "personal", "casual"]},
                     "repeat":            {"type": "string", "enum": ["none", "daily", "weekly"]},
                     "participants":      {"type": "array", "items": {"type": "string"}, "description": "Empty array [] if none"},
                     "action_label":      {"type": "string", "description": "Short specific action button label e.g. 'Having lunch 🍜', 'Took it 💊'. Under 5 words. No generic 'Done'."},
@@ -114,7 +114,7 @@ WORKFLOW:
 6. Be concise and conversational — one short confirmation message after acting, nothing more
 
 Rules for CREATING reminders:
-- type must be one of: "important", "health", "routine", "personal"
+- type must be one of: "important", "health", "routine", "personal", "casual"
 - repeat must be one of: "none", "daily", "weekly"
 - location: empty string "" if not mentioned
 - participants: always an array [], use empty array if none
@@ -143,17 +143,20 @@ PRE-ALERT GUIDE — decide pre_alert_minutes based on context and available time
 FOLLOW-UP GUIDE — decide follow_up_minutes based on whether completion matters:
 - Send/submit/reply/complete tasks → 15-20
 - Medication → 10
-- Meetings/exams → expected duration if mentioned, else ask the user for it
+- Meetings/exams → expected duration if mentioned, else 60
 - Casual reminders, social things, simple one-second actions → 0
 - When in doubt → 0
 
-REMINDER TYPE GUIDE:
-- "important": high-stakes or time-critical things — exams, interviews, deadlines, appointments, submissions, anything with real consequences if missed
+REMINDER TYPE GUIDE — choose the single best fit:
+- "important": high-stakes or time-critical things — exams, interviews, deadlines, submissions, anything with real consequences if missed
 - "health": medicine, doses, doctor visits, workouts, anything body or wellness related
 - "routine": recurring small habits — drink water, study time, chores, daily check-ins
-- "personal": everything else — social calls, hobbies, casual reminders, low-stakes personal stuff
+- "personal": specific, purposeful one-off things tied to a goal or person — buy a gift, pick up dry cleaning, call the bank, send something to someone
+- "casual": low-effort, vague, relaxed reminders with no real stakes — "remind me in 30 minutes", "take a break after an hour", a quick nudge with no specific task attached
 
-When in doubt: does missing this have real consequences? If yes → important. Is it body/health related? → health. Is it a repeating small habit? → routine. Otherwise → personal.
+How to tell personal vs casual: personal has a clear concrete action/purpose ("buy X", "call Y"). Casual is just a time-based nudge with nothing specific riding on it ("remind me in a bit", "check in later").
+
+When in doubt: does missing this have real consequences? → important. Body/health related? → health. A repeating small habit? → routine. A specific purposeful one-off task? → personal. Just a vague time-based nudge? → casual.
 
 Rules for DELETING reminders:
 - Call get_reminders first, find the ID, then delete

@@ -10,7 +10,8 @@ FALLBACK_PRE_ALERT = {
     "important": 20,
     "health":    5,
     "routine":   10,
-    "personal":  0
+    "personal":  5,
+    "casual":    0
 }
 
 # Emoji + generic fallback action label per type (used only if agent didn't set a custom action_label)
@@ -18,7 +19,8 @@ _TYPE_META = {
     "important": {"emoji": "❗", "action": "done",  "label": "Done ✓"},
     "health":    {"emoji": "💊", "action": "done",  "label": "Done ✓"},
     "routine":   {"emoji": "🔁", "action": "done",  "label": "Done ✓"},
-    "personal":  {"emoji": "🔔", "action": "done",  "label": "Done ✓"},
+    "personal":  {"emoji": "📌", "action": "done",  "label": "Done ✓"},
+    "casual":    {"emoji": "🔔", "action": "done",  "label": "Done ✓"},
 }
 
 def get_action_config(reminder):

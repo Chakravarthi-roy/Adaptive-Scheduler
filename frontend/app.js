@@ -359,7 +359,7 @@ function filterReminders(reminders) {
 }
 
 const typeColors = {
-  important: '#c4501e', health: '#0a5c44', routine: '#0081a7', personal: '#a89a8a'
+  important: '#c4501e', health: '#0a5c44', routine: '#0081a7', personal: '#6b4f8a', casual: '#a89a8a'
 }
 
 function renderReminders(allReminders) {
