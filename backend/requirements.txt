@@ -4,6 +4,7 @@ sqlalchemy
 psycopg2-binary
 python-dotenv
 groq
+bcrypt
 pywebpush
 python-multipart
 requests
