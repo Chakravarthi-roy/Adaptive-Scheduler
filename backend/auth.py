@@ -1,0 +1,138 @@
+from fastapi import APIRouter, HTTPException, Request, Header
+from database import SessionLocal, User, Reminder, PushSubscription
+from datetime import datetime, timedelta
+import bcrypt, uuid, time
+
+router = APIRouter()
+
+# ─── Simple in-memory rate limiter — max 5 attempts per IP per 15 min ─────────
+# Keyed by IP, resets naturally as the dict is small and short-lived.
+_attempts = {}  # { ip: [timestamp, timestamp, ...] }
+RATE_LIMIT = 5
+RATE_WINDOW = 15 * 60  # seconds
+
+
+def _check_rate_limit(ip: str):
+    now = time.time()
+    attempts = _attempts.get(ip, [])
+    attempts = [t for t in attempts if now - t < RATE_WINDOW]  # drop old entries
+    if len(attempts) >= RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please wait 15 minutes and try again.")
+    attempts.append(now)
+    _attempts[ip] = attempts
+
+
+def _get_ip(request: Request) -> str:
+    # Render sits behind a proxy — check forwarded header first
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+# ─── Password helpers ──────────────────────────────────────────────────────────
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return bcrypt.checkpw(password.encode(), password_hash.encode())
+
+
+# ─── Session helpers ────────────────────────────────────────────────────────────
+
+def create_session(user_id: str) -> str:
+    from database import Session as SessionModel
+    db = SessionLocal()
+    try:
+        token = str(uuid.uuid4())
+        session = SessionModel(token=token, user_id=user_id, created_at=datetime.utcnow())
+        db.add(session)
+        db.commit()
+        return token
+    finally:
+        db.close()
+
+
+def get_user_from_token(authorization: str | None):
+    """Resolve a user from the Authorization header. Returns None if invalid/missing."""
+    if not authorization:
+        return None
+    token = authorization.replace("Bearer ", "").strip()
+    if not token:
+        return None
+    from database import Session as SessionModel
+    db = SessionLocal()
+    try:
+        session = db.query(SessionModel).filter(SessionModel.token == token).first()
+        if not session:
+            return None
+        user = db.query(User).filter(User.id == session.user_id).first()
+        return user
+    finally:
+        db.close()
+
+
+# ─── Routes ─────────────────────────────────────────────────────────────────────
+
+@router.post("/signup")
+def signup(data: dict, request: Request):
+    _check_rate_limit(_get_ip(request))
+
+    email    = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    nickname = (data.get("nickname") or "").strip() or None
+
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Please enter a valid email")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    db = SessionLocal()
+    try:
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+        user = User(
+            id=str(uuid.uuid4()),
+            email=email,
+            password_hash=hash_password(password),
+            nickname=nickname,
+            created_at=datetime.utcnow(),
+            is_demo=False
+        )
+        db.add(user)
+        db.commit()
+        token = create_session(user.id)
+        return {"token": token, "nickname": user.nickname, "email": user.email}
+    finally:
+        db.close()
+
+
+@router.post("/login")
+def login(data: dict, request: Request):
+    _check_rate_limit(_get_ip(request))
+
+    email    = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user or not verify_password(password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+        token = create_session(user.id)
+        return {"token": token, "nickname": user.nickname, "email": user.email}
+    finally:
+        db.close()
+
+
+@router.get("/me")
+def me(authorization: str | None = Header(default=None)):
+    user = get_user_from_token(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not logged in")
+    return {"nickname": user.nickname, "email": user.email, "is_demo": user.is_demo}

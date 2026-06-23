@@ -106,7 +106,8 @@ def check_reminders():
                 action=notif["action"],
                 action_label=notif["action_label"],
                 reminder_id=reminder.id,
-                is_pre_alert=True
+                is_pre_alert=True,
+                user_id=reminder.user_id
             )
             if result.get("status") == "sent":
                 reminder.pre_alerted = True
@@ -127,7 +128,8 @@ def check_reminders():
                 notif["persistent"],
                 action=notif["action"],
                 action_label=notif["action_label"],
-                reminder_id=reminder.id
+                reminder_id=reminder.id,
+                user_id=reminder.user_id
             )
 
             if result.get("status") == "sent":
@@ -169,7 +171,8 @@ def check_reminders():
                     action=reminder.action_label or "done",
                     action_label="Done now ✓",
                     reminder_id=reminder.id,
-                    is_pre_alert=False
+                    is_pre_alert=False,
+                    user_id=reminder.user_id
                 )
         if missed_count:
             db.commit()
@@ -207,7 +210,8 @@ def check_reminders():
                 action=notif["action"],
                 action_label=notif["action_label"],
                 reminder_id=reminder.id,
-                is_pre_alert=False
+                is_pre_alert=False,
+                user_id=reminder.user_id
             )
             if result.get("status") == "sent":
                 reminder.follow_up_sent = True

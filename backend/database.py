@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text
+from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
@@ -12,10 +12,31 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
+
+class User(Base):
+    __tablename__ = "users"
+
+    id            = Column(String, primary_key=True)
+    email         = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    nickname      = Column(String, nullable=True)
+    created_at    = Column(DateTime, nullable=True)
+    is_demo       = Column(Boolean, default=False)  # used in commit 2
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    token      = Column(String, primary_key=True)
+    user_id    = Column(String, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, nullable=True)
+
+
 class Reminder(Base):
     __tablename__ = "reminders"
 
     id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)  # nullable for migration safety
     title = Column(String, nullable=False)
     datetime = Column(DateTime, nullable=True)
     location = Column(String, nullable=True)
@@ -34,6 +55,7 @@ class Reminder(Base):
 class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
     id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     subscription_json = Column(Text, nullable=False)
 
 def init_db():

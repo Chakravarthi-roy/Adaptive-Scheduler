@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Scheduler — Sign in</title>
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#dda15e" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Scheduler" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="icon" href="data:,">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    /* ── Auth-specific styles ───────────────────────────────────────────── */
+    .auth-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 28px;
+      padding-bottom: 60px;
+    }
+
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 26px 22px 22px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 4px 24px rgba(221,161,94,0.09);
+    }
+
+    .auth-heading {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      font-style: italic;
+      color: var(--brown);
+      margin-bottom: 4px;
+    }
+
+    .auth-sub {
+      font-size: 12.5px;
+      color: var(--muted);
+      margin-bottom: 22px;
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Tab switcher ────────────────────────────────────────────────────── */
+    .auth-tabs {
+      display: flex;
+      background: var(--mint);
+      border-radius: 10px;
+      padding: 3px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      background: none;
+      border-radius: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+    }
+
+    .auth-tab.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 6px rgba(74,53,32,0.08);
+    }
+
+    /* ── Error banner ────────────────────────────────────────────────────── */
+    .auth-error {
+      font-size: 12.5px;
+      color: #9a3010;
+      background: rgba(154,48,16,0.07);
+      border: 1px solid rgba(154,48,16,0.18);
+      border-radius: 9px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      display: none;
+      font-family: 'DM Sans', sans-serif;
+      line-height: 1.4;
+    }
+    .auth-error.show { display: block; }
+
+    /* ── Auth submit button ──────────────────────────────────────────────── */
+    .auth-btn {
+      width: 100%;
+      padding: 13px 18px;
+      border-radius: 13px;
+      background: var(--brown);
+      color: var(--cream);
+      border: none;
+      font-size: 14px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: background 0.15s, transform 0.1s;
+      letter-spacing: 0.01em;
+    }
+    .auth-btn:hover  { background: #c48a4a; }
+    .auth-btn:active { transform: scale(0.98); }
+    .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── Demo section ────────────────────────────────────────────────────── */
+    .demo-section {
+      width: 100%;
+      max-width: 400px;
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .demo-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 11px;
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.08em;
+    }
+    .demo-divider::before,
+    .demo-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .btn-demo {
+      width: 100%;
+      padding: 13px 18px;
+      border-radius: 13px;
+      background: var(--mint);
+      color: var(--text);
+      border: 1.5px solid var(--sage);
+      font-size: 13.5px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-demo:hover  { background: var(--sage); border-color: #a8b88a; }
+    .btn-demo:active { transform: scale(0.98); }
+    .btn-demo:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .demo-hint {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 10px;
+      font-family: 'DM Mono', monospace;
+      letter-spacing: 0.03em;
+      opacity: 0.85;
+    }
+
+    /* ── Optional nickname field animation ───────────────────────────────── */
+    .field-slide {
+      overflow: hidden;
+      transition: max-height 0.25s ease, opacity 0.2s ease;
+      max-height: 0;
+      opacity: 0;
+    }
+    .field-slide.open {
+      max-height: 80px;
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- ── Top Header ── -->
+    <header class="top-bar">
+      <div class="top-bar-inner">
+        <div class="app-wordmark">Scheduler</div>
+        <div class="top-datetime">
+          <div class="top-date" id="today-date"></div>
+          <div class="top-time-row">
+            <span class="tz-badge" id="tz-badge">IST</span>
+            <div class="top-time" id="today-time"></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Page Title Band ── -->
+    <div class="page-band">
+      <h1 class="page-title" id="page-band-title" style="font-style:italic">Welcome</h1>
+    </div>
+
+    <!-- ── Auth Content ── -->
+    <main class="content auth-content">
+
+      <!-- Auth Card -->
+      <div class="auth-card">
+        <p class="auth-heading" id="auth-heading">Sign in</p>
+        <p class="auth-sub" id="auth-sub">good to have you back</p>
+
+        <!-- Tab Switcher -->
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign in</button>
+          <button class="auth-tab" id="tab-signup" onclick="switchTab('signup')">Create account</button>
+        </div>
+
+        <!-- Error Banner -->
+        <div class="auth-error" id="auth-error"></div>
+
+        <!-- Fields -->
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="auth-email" placeholder="your@email.com" autocomplete="email" />
+        </div>
+
+        <!-- Nickname — only shown on signup -->
+        <div class="field field-slide" id="nickname-field">
+          <label>Nickname <span style="opacity:0.45;font-size:9px;letter-spacing:0.04em">OPTIONAL</span></label>
+          <input type="text" id="auth-nickname" placeholder="What should we call you?" autocomplete="nickname" />
+        </div>
+
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+
+        <button class="auth-btn" id="auth-submit" onclick="submitAuth()">Sign in</button>
+      </div>
+
+      <!-- Demo Section -->
+      <div class="demo-section">
+        <div class="demo-divider"><span>or</span></div>
+        <button class="btn-demo" id="demo-btn" onclick="tryDemo()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          Try Demo — no account needed
+        </button>
+        <p class="demo-hint">Create one reminder · see how it works · no sign-up</p>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
+
+    // If already logged in, skip straight to app
+    if (localStorage.getItem('scheduler_token')) {
+      window.location.replace('/')
+    }
+
+    // ── Clock ──────────────────────────────────────────────────────────────
+    document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+    })
+
+    function updateClock() {
+      const now = new Date()
+      const timeEl = document.getElementById('today-time')
+      const tzEl   = document.getElementById('tz-badge')
+      // Use saved timezone preference if it exists, else IST
+      const tz = (() => {
+        try { return JSON.parse(localStorage.getItem('scheduler_settings') || '{}').timezone || 'Asia/Kolkata' }
+        catch { return 'Asia/Kolkata' }
+      })()
+      if (timeEl) timeEl.textContent = now.toLocaleTimeString('en-US', {
+        hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true, timeZone: tz
+      })
+      if (tzEl) {
+        const shortTz = now.toLocaleTimeString('en-US', { timeZoneName: 'short', timeZone: tz }).split(' ').pop()
+        tzEl.textContent = shortTz
+      }
+    }
+    updateClock()
+    setInterval(updateClock, 1000)
+
+    // ── Enter key support ──────────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitAuth()
+    })
+
+    // ── Tab switching ──────────────────────────────────────────────────────
+    let currentTab = 'login'
+
+    function switchTab(tab) {
+      currentTab = tab
+      const isSignup = tab === 'signup'
+
+      document.getElementById('tab-login').classList.toggle('active', !isSignup)
+      document.getElementById('tab-signup').classList.toggle('active', isSignup)
+      document.getElementById('nickname-field').classList.toggle('open', isSignup)
+      document.getElementById('auth-submit').textContent = isSignup ? 'Create account' : 'Sign in'
+      document.getElementById('auth-heading').textContent = isSignup ? 'Create account' : 'Sign in'
+      document.getElementById('auth-sub').textContent = isSignup ? 'start nudging smarter' : 'good to have you back'
+      document.getElementById('page-band-title').textContent = isSignup ? 'Join' : 'Welcome'
+
+      // Update autocomplete hint for password field
+      document.getElementById('auth-password').autocomplete = isSignup ? 'new-password' : 'current-password'
+
+      hideError()
+    }
+
+    // ── Error handling ─────────────────────────────────────────────────────
+    function showError(msg) {
+      const el = document.getElementById('auth-error')
+      el.textContent = msg
+      el.classList.add('show')
+    }
+
+    function hideError() {
+      document.getElementById('auth-error').classList.remove('show')
+    }
+
+    // ── Loading state ──────────────────────────────────────────────────────
+    function setLoading(loading) {
+      const btn = document.getElementById('auth-submit')
+      btn.disabled = loading
+      if (loading) {
+        btn.textContent = currentTab === 'login' ? 'Signing in…' : 'Creating account…'
+      } else {
+        btn.textContent = currentTab === 'login' ? 'Sign in' : 'Create account'
+      }
+    }
+
+    // ── Submit auth ────────────────────────────────────────────────────────
+    async function submitAuth() {
+      hideError()
+      const email    = (document.getElementById('auth-email').value || '').trim()
+      const password = document.getElementById('auth-password').value || ''
+      const nickname = (document.getElementById('auth-nickname').value || '').trim()
+
+      if (!email)    { showError('Please enter your email address'); return }
+      if (!password) { showError('Please enter your password'); return }
+
+      setLoading(true)
+
+      try {
+        const endpoint = currentTab === 'login' ? '/login' : '/signup'
+        const body = currentTab === 'login'
+          ? { email, password }
+          : { email, password, nickname: nickname || null }
+
+        const res = await fetch(`${API_BASE}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          showError(data.detail || 'Something went wrong. Please try again.')
+          return
+        }
+
+        // Save to localStorage and head to the app
+        localStorage.setItem('scheduler_token', data.token)
+        localStorage.setItem('scheduler_nickname', data.nickname || email.split('@')[0])
+        localStorage.setItem('scheduler_email', data.email)
+        localStorage.removeItem('scheduler_is_demo')
+        window.location.replace('/')
+
+      } catch (err) {
+        showError('Could not connect to the server. Is your internet on?')
+        console.error(err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    // ── Demo mode ──────────────────────────────────────────────────────────
+    async function tryDemo() {
+      const btn = document.getElementById('demo-btn')
+      btn.disabled = true
+      btn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+        </svg>
+        Setting up demo…`
+
+      try {
+        const res = await fetch(`${API_BASE}/demo`, { method: 'POST' })
+
+        if (!res.ok) {
+          // Demo endpoint not available yet — show a friendly message
+          alert('Demo is being set up! In the meantime, create a free account — it only takes a few seconds.')
+          return
+        }
+
+        const data = await res.json()
+        localStorage.setItem('scheduler_token', data.token)
+        localStorage.setItem('scheduler_nickname', 'Demo')
+        localStorage.setItem('scheduler_email', '')
+        localStorage.setItem('scheduler_is_demo', 'true')
+        window.location.replace('/')
+
+      } catch (err) {
+        alert('Could not start demo. Please try again or create a free account.')
+        console.error(err)
+      } finally {
+        btn.disabled = false
+        btn.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          Try Demo — no account needed`
+      }
+    }
+  </script>
+</body>
+</html>

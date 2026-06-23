@@ -1,17 +1,27 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Header
 from database import SessionLocal, Reminder
+from auth import get_user_from_token
 from datetime import datetime, timedelta
 import json, uuid
 
 router = APIRouter()
 
 
+def _require_user(authorization):
+    user = get_user_from_token(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Please log in")
+    return user
+
+
 @router.post("/reminders")
-def save_reminder(data: dict):
+def save_reminder(data: dict, authorization: str | None = Header(default=None)):
+    user = _require_user(authorization)
     db = SessionLocal()
     try:
         reminder = Reminder(
             id=str(uuid.uuid4()),
+            user_id=user.id,
             title=data.get("title", ""),
             datetime=datetime.fromisoformat(data["datetime"]) if data.get("datetime") else None,
             location=data.get("location"),
@@ -31,10 +41,11 @@ def save_reminder(data: dict):
 
 
 @router.get("/reminders")
-def get_reminders():
+def get_reminders(authorization: str | None = Header(default=None)):
+    user = _require_user(authorization)
     db = SessionLocal()
     try:
-        reminders = db.query(Reminder).order_by(Reminder.datetime).all()
+        reminders = db.query(Reminder).filter(Reminder.user_id == user.id).order_by(Reminder.datetime).all()
         return [
             {
                 "id": r.id,
@@ -54,13 +65,14 @@ def get_reminders():
 
 
 @router.post("/reminders/{reminder_id}/snooze")
-def snooze_reminder(reminder_id: str):
+def snooze_reminder(reminder_id: str, authorization: str | None = Header(default=None)):
+    user = _require_user(authorization)
     db = SessionLocal()
     try:
-        reminder = db.query(Reminder).filter(Reminder.id == reminder_id).first()
+        reminder = db.query(Reminder).filter(Reminder.id == reminder_id, Reminder.user_id == user.id).first()
         if reminder and reminder.datetime:
-            reminder.datetime   = reminder.datetime + timedelta(minutes=10)
-            reminder.notified   = False
+            reminder.datetime    = reminder.datetime + timedelta(minutes=10)
+            reminder.notified    = False
             reminder.pre_alerted = False
             db.commit()
             return {"status": "snoozed"}
@@ -70,15 +82,15 @@ def snooze_reminder(reminder_id: str):
 
 
 @router.patch("/reminders/{reminder_id}/done")
-def mark_done(reminder_id: str):
+def mark_done(reminder_id: str, authorization: str | None = Header(default=None)):
+    user = _require_user(authorization)
     db = SessionLocal()
     try:
-        reminder = db.query(Reminder).filter(Reminder.id == reminder_id).first()
+        reminder = db.query(Reminder).filter(Reminder.id == reminder_id, Reminder.user_id == user.id).first()
         if not reminder:
             return {"status": "not found"}
 
         if reminder.repeat == "daily" and reminder.datetime:
-            # don't mark done — push to next day and reset flags
             reminder.datetime       = reminder.datetime + timedelta(days=1)
             reminder.notified       = False
             reminder.pre_alerted    = False

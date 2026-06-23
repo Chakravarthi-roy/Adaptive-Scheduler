@@ -23,10 +23,13 @@ def build_followup_notification(reminder):
         "is_pre_alert": False
     }
 
-def send_notification(title, body, persistent=False, action=None, action_label=None, reminder_id=None, is_pre_alert=False, vibrate=True):
+def send_notification(title, body, persistent=False, action=None, action_label=None, reminder_id=None, is_pre_alert=False, vibrate=True, user_id=None):
     db = SessionLocal()
     try:
-        sub = db.query(PushSubscription).first()
+        query = db.query(PushSubscription)
+        if user_id:
+            query = query.filter(PushSubscription.user_id == user_id)
+        sub = query.first()
         if not sub:
             return {"status": "no subscription found"}
         subscription = json.loads(sub.subscription_json)

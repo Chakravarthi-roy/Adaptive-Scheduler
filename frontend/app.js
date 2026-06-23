@@ -1,9 +1,46 @@
+// ─── AUTH GUARD — runs before anything else ────────────────────────────────────
+// If there's no token, kick to login immediately
+;(function () {
+  if (!localStorage.getItem('scheduler_token')) {
+    window.location.replace('/login.html')
+  }
+})()
+
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
 // const API_BASE = 'http://localhost:8000'
 
 const VAPID_PUBLIC_KEY = 'BLdUTJ82_k03z93xAJadQ2U58tp-V5ICr_g4Hf_20L6uJ0C9XDnLHxgux-UOJ-QjLMFzoTaP4oTwx5FktGWeSyY'
 
+// ─── AUTH HELPERS ──────────────────────────────────────────────────────────────
+function getToken()    { return localStorage.getItem('scheduler_token') || '' }
+function getNickname() { return localStorage.getItem('scheduler_nickname') || 'You' }
+function getEmail()    { return localStorage.getItem('scheduler_email') || '' }
+function isDemo()      { return localStorage.getItem('scheduler_is_demo') === 'true' }
+
+// JSON request headers + auth token
+function getAuthHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${getToken()}`
+  }
+}
+
+// Called whenever the server says 401 — clear local state and send to login
+function handle401() {
+  localStorage.removeItem('scheduler_token')
+  localStorage.removeItem('scheduler_nickname')
+  localStorage.removeItem('scheduler_email')
+  localStorage.removeItem('scheduler_is_demo')
+  window.location.replace('/login.html')
+}
+
+function logout() {
+  localStorage.clear()
+  window.location.replace('/login.html')
+}
+
+// ─── PUSH SETUP ───────────────────────────────────────────────────────────────
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -22,17 +59,19 @@ async function initPush() {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     })
-    await fetch(`${API_BASE}/subscribe`, {
+    const res = await fetch(`${API_BASE}/subscribe`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${getToken()}`
+      },
       body: JSON.stringify(subscription)
     })
+    if (res.status === 401) handle401()
   } catch (err) {
     console.error('push setup error:', err)
   }
 }
-
-initPush()
 
 // ─── Date & Live Clock ───────────────────────────────────────────────────────
 document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-US', {
@@ -50,17 +89,17 @@ let awaitingReply = false
 let currentView = 'reminders'
 
 // ─── Elements ─────────────────────────────────────────────────────────────────
-const micBtn     = document.getElementById('mic-btn')
-const typeBtn    = document.getElementById('type-btn')
-const typeArea   = document.getElementById('type-area')
-const typeInput  = document.getElementById('type-input')
-const typeSend   = document.getElementById('type-send')
+const micBtn      = document.getElementById('mic-btn')
+const typeBtn     = document.getElementById('type-btn')
+const typeArea    = document.getElementById('type-area')
+const typeInput   = document.getElementById('type-input')
+const typeSend    = document.getElementById('type-send')
 const chatBubbles = document.getElementById('chat-bubbles')
-const overlay    = document.getElementById('overlay')
-const btnCancel  = document.getElementById('btn-cancel')
-const btnCancel2 = document.getElementById('btn-cancel-2')
-const btnSave    = document.getElementById('btn-save')
-const micToast   = document.getElementById('mic-toast')
+const overlay     = document.getElementById('overlay')
+const btnCancel   = document.getElementById('btn-cancel')
+const btnCancel2  = document.getElementById('btn-cancel-2')
+const btnSave     = document.getElementById('btn-save')
+const micToast    = document.getElementById('mic-toast')
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 let toastTimer = null
@@ -160,7 +199,13 @@ async function handleAudioInput(audioBlob) {
   try {
     const formData = new FormData()
     formData.append('audio', audioBlob, 'recording.webm')
-    const res = await fetch(`${API_BASE}/transcribe`, { method: 'POST', body: formData })
+    // Note: don't set Content-Type for FormData — browser sets it with boundary
+    const res = await fetch(`${API_BASE}/transcribe`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getToken()}` },
+      body: formData
+    })
+    if (res.status === 401) { handle401(); return }
     const data = await res.json()
     const transcript = data.transcript?.trim()
     if (!transcript) {
@@ -197,9 +242,10 @@ async function handleTextInput(text) {
   try {
     const res = await fetch(`${API_BASE}/agent`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ messages: agentMessages })
     })
+    if (res.status === 401) { handle401(); return }
     const result = await res.json()
 
     if (result.messages) {
@@ -247,8 +293,10 @@ async function handleTextInput(text) {
 // ─── Confirm Modal ────────────────────────────────────────────────────────────
 let _pendingExtracted = null
 
+const SAVE_BTN_LABEL = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Reminder`
+
 function showConfirmModal(extracted) {
-  _pendingExtracted = extracted  // keep full agent data — action_label, pre_alert_minutes, follow_up_minutes, participants
+  _pendingExtracted = extracted  // keep full agent data — action_label, pre_alert_minutes, etc.
   document.getElementById('field-title').value    = extracted.title    || ''
   document.getElementById('field-location').value = extracted.location || ''
   document.getElementById('field-type').value     = extracted.type     || 'personal'
@@ -277,22 +325,25 @@ btnSave.addEventListener('click', async () => {
 
   const reminder = {
     title,
-    datetime:           document.getElementById('field-datetime').value || null,
-    location:           document.getElementById('field-location').value || null,
-    type:               document.getElementById('field-type').value,
-    repeat:             document.getElementById('field-repeat').value,
-    participants:       _pendingExtracted?.participants || [],
-    action_label:       _pendingExtracted?.action_label || null,
-    pre_alert_minutes:  document.getElementById('field-pre-alert').value !== '' ? parseInt(document.getElementById('field-pre-alert').value) : null,
-    follow_up_minutes:  document.getElementById('field-follow-up').value !== '' ? parseInt(document.getElementById('field-follow-up').value) : null
+    datetime:          document.getElementById('field-datetime').value || null,
+    location:          document.getElementById('field-location').value || null,
+    type:              document.getElementById('field-type').value,
+    repeat:            document.getElementById('field-repeat').value,
+    participants:      _pendingExtracted?.participants || [],
+    action_label:      _pendingExtracted?.action_label || null,
+    pre_alert_minutes: document.getElementById('field-pre-alert').value !== ''
+                         ? parseInt(document.getElementById('field-pre-alert').value) : null,
+    follow_up_minutes: document.getElementById('field-follow-up').value !== ''
+                         ? parseInt(document.getElementById('field-follow-up').value) : null
   }
 
   try {
     const res = await fetch(`${API_BASE}/reminders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(reminder)
     })
+    if (res.status === 401) { handle401(); return }
     const data = await res.json()
     if (data.status === 'saved') {
       overlay.classList.remove('show')
@@ -303,7 +354,7 @@ btnSave.addEventListener('click', async () => {
     alert('Could not save. Is the backend running?')
   } finally {
     btnSave.disabled = false
-    btnSave.textContent = 'Save Reminder'
+    btnSave.innerHTML = SAVE_BTN_LABEL
   }
 })
 
@@ -335,7 +386,10 @@ async function loadReminders() {
   if (currentView === 'settings') return
   showSkeleton()
   try {
-    const res = await fetch(`${API_BASE}/reminders`)
+    const res = await fetch(`${API_BASE}/reminders`, {
+      headers: { 'Authorization': `Bearer ${getToken()}` }
+    })
+    if (res.status === 401) { handle401(); return }
     _allReminders = await res.json()
     renderReminders(_allReminders)
   } catch (err) {
@@ -423,7 +477,10 @@ function renderReminders(allReminders) {
 }
 
 async function markDone(id) {
-  await fetch(`${API_BASE}/reminders/${id}/done`, { method: 'PATCH' })
+  await fetch(`${API_BASE}/reminders/${id}/done`, {
+    method: 'PATCH',
+    headers: { 'Authorization': `Bearer ${getToken()}` }
+  })
   loadReminders()
 }
 
@@ -431,26 +488,23 @@ async function markDone(id) {
 function switchView(view) {
   currentView = view
 
-  // Update nav active state
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'))
   const activeBtn = document.getElementById(`nav-${view}`)
   if (activeBtn) activeBtn.classList.add('active')
 
-  // Update page title
   const titles = { reminders: 'Reminders', missed: 'Missed', done: 'Done', settings: 'Settings' }
   document.getElementById('page-title').textContent = titles[view] || view
 
-  // Show/hide panels
-  const remArea      = document.getElementById('reminders-area')
+  const remArea       = document.getElementById('reminders-area')
   const settingsPanel = document.getElementById('settings-panel')
 
   if (view === 'settings') {
-    remArea.style.display      = 'none'
+    remArea.style.display       = 'none'
     settingsPanel.style.display = 'block'
     document.getElementById('reminder-count').textContent = ''
     populateSettings()
   } else {
-    remArea.style.display      = ''
+    remArea.style.display       = ''
     settingsPanel.style.display = 'none'
     loadReminders()
   }
@@ -460,13 +514,13 @@ function switchView(view) {
 const SETTINGS_KEY = 'scheduler_settings'
 
 const DEFAULTS = {
-  morning:      '08:00',
-  evening:      '18:00',
-  night:        '21:00',
-  inABit:       10,
-  afterAWhile:  30,
-  vibration:    true,
-  timezone:     'Asia/Kolkata'
+  morning:     '08:00',
+  evening:     '18:00',
+  night:       '21:00',
+  inABit:      10,
+  afterAWhile: 30,
+  vibration:   true,
+  timezone:    'Asia/Kolkata'
 }
 
 function loadSettings() {
@@ -480,7 +534,7 @@ function saveSettings() {
     morning:     document.getElementById('s-morning')?.value     || DEFAULTS.morning,
     evening:     document.getElementById('s-evening')?.value     || DEFAULTS.evening,
     night:       document.getElementById('s-night')?.value       || DEFAULTS.night,
-    inABit:      parseInt(document.getElementById('s-in-a-bit')?.value)     || DEFAULTS.inABit,
+    inABit:      parseInt(document.getElementById('s-in-a-bit')?.value)      || DEFAULTS.inABit,
     afterAWhile: parseInt(document.getElementById('s-after-a-while')?.value) || DEFAULTS.afterAWhile,
     vibration:   document.getElementById('vibration-toggle')?.classList.contains('on') ?? DEFAULTS.vibration,
     timezone:    document.getElementById('s-timezone')?.value || DEFAULTS.timezone
@@ -491,24 +545,56 @@ function saveSettings() {
 function populateSettings() {
   const s = loadSettings()
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val }
-  set('s-morning', s.morning)
-  set('s-evening', s.evening)
-  set('s-night',   s.night)
-  set('s-in-a-bit',      s.inABit)
-  set('s-after-a-while', s.afterAWhile)
-  set('s-timezone',      s.timezone)
-  // update displays
+  set('s-morning',      s.morning)
+  set('s-evening',      s.evening)
+  set('s-night',        s.night)
+  set('s-in-a-bit',     s.inABit)
+  set('s-after-a-while',s.afterAWhile)
+  set('s-timezone',     s.timezone)
   const d1 = document.getElementById('s-in-a-bit-display')
   const d2 = document.getElementById('s-after-a-while-display')
   if (d1) d1.textContent = s.inABit
   if (d2) d2.textContent = s.afterAWhile
-  // vibration toggle
   const vt = document.getElementById('vibration-toggle')
   if (vt) { s.vibration ? vt.classList.add('on') : vt.classList.remove('on') }
+
+  // ── Inject Account section once ──────────────────────────────────────────
+  if (!document.getElementById('account-section')) {
+    const panel = document.getElementById('settings-panel')
+    const section = document.createElement('div')
+    section.id = 'account-section'
+    section.className = 'settings-group'
+    section.innerHTML = `
+      <div class="settings-label">Account</div>
+      <div class="settings-item">
+        <div class="settings-item-label">
+          <span>${getNickname()}</span>
+          ${getEmail() ? `<span class="settings-hint">${getEmail()}</span>` : ''}
+        </div>
+        ${isDemo() ? `<span class="tag tag-casual">demo</span>` : ''}
+      </div>
+      ${isDemo() ? `
+        <div class="settings-item" style="gap:12px">
+          <span style="font-size:12px;color:var(--muted);line-height:1.4">Create a free account to keep your reminders</span>
+          <a href="/login.html" style="padding:7px 14px;border-radius:9px;background:var(--brown);color:var(--cream);font-size:12px;font-family:'DM Sans',sans-serif;font-weight:600;text-decoration:none;white-space:nowrap;flex-shrink:0">Sign up</a>
+        </div>` : ''}
+      <div class="settings-item">
+        <span>Sign out</span>
+        <button
+          onclick="logout()"
+          style="padding:6px 16px;border-radius:8px;background:var(--mint);border:1.5px solid var(--border);color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background 0.15s"
+          onmouseover="this.style.background='var(--sage)'"
+          onmouseout="this.style.background='var(--mint)'"
+        >Sign out</button>
+      </div>
+    `
+    // Insert at top of settings, before all other groups
+    panel.insertBefore(section, panel.firstChild)
+  }
 }
 
 function stepValue(id, delta) {
-  const input = document.getElementById(id)
+  const input   = document.getElementById(id)
   const display = document.getElementById(id + '-display')
   if (!input || !display) return
   const min = 1, max = 120
@@ -531,7 +617,7 @@ function toggleVibration() {
 
 // ─── Clock (defined after DEFAULTS so loadSettings works) ───────────────────
 function updateClock() {
-  const s = loadSettings()
+  const s  = loadSettings()
   const tz = s.timezone || 'Asia/Kolkata'
   const now = new Date()
   const timeEl = document.getElementById('today-time')
@@ -551,7 +637,7 @@ setInterval(updateClock, 1000)
 
 // Build a settings context string to inject into agent messages
 function buildSettingsContext() {
-  const s = loadSettings()
+  const s  = loadSettings()
   const tz = s.timezone || 'Asia/Kolkata'
   const now = new Date()
   const currentDateTime = now.toLocaleString('en-US', {
@@ -564,5 +650,33 @@ function buildSettingsContext() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Show demo banner at top of reminders area if in demo mode
+  if (isDemo()) {
+    const banner = document.createElement('div')
+    banner.style.cssText = [
+      'background:rgba(181,131,90,0.1)',
+      'border:1px solid rgba(181,131,90,0.22)',
+      'border-radius:10px',
+      'padding:10px 14px',
+      'margin-bottom:4px',
+      'font-size:12px',
+      'color:var(--muted)',
+      'display:flex',
+      'align-items:center',
+      'gap:8px',
+      'line-height:1.4'
+    ].join(';')
+    banner.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--brown)">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>You're in demo mode.
+        <a href="/login.html" style="color:var(--brown);font-weight:600;text-decoration:none">Create a free account</a>
+        to keep your reminders.
+      </span>`
+    document.getElementById('reminders-area').before(banner)
+  }
+
   loadReminders()
+  initPush()
 })

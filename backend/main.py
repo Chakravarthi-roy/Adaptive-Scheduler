@@ -1,8 +1,9 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from database import init_db
 from agent import run_agent
+from auth import router as auth_router, get_user_from_token
 from reminders import router as reminders_router
 from push import router as push_router
 from scheduler import check_reminders
@@ -23,6 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(reminders_router)
 app.include_router(push_router)
 
@@ -50,9 +52,12 @@ async def transcribe(audio: UploadFile = File(...)):
 
 
 @app.post("/agent")
-async def agent(data: dict):
+async def agent(data: dict, authorization: str | None = Header(default=None)):
+    user = get_user_from_token(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Please log in")
     messages = data.get("messages", [])
-    return await run_agent(messages)
+    return await run_agent(messages, user.id)
 
 
 @app.get("/cron/check-reminders")

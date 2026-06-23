@@ -165,10 +165,10 @@ Rules for DELETING reminders:
 
 # ─── Tool Handlers ────────────────────────────────────────────────────────────
 
-def get_reminders_tool():
+def get_reminders_tool(user_id):
     db = SessionLocal()
     try:
-        reminders = db.query(Reminder).filter(Reminder.done == False).order_by(Reminder.datetime).all()
+        reminders = db.query(Reminder).filter(Reminder.done == False, Reminder.user_id == user_id).order_by(Reminder.datetime).all()
         return [
             {
                 "id": r.id,
@@ -183,12 +183,12 @@ def get_reminders_tool():
         db.close()
 
 
-def delete_reminders_tool(ids):
+def delete_reminders_tool(ids, user_id):
     db = SessionLocal()
     try:
         deleted = 0
         for reminder_id in ids:
-            reminder = db.query(Reminder).filter(Reminder.id == reminder_id).first()
+            reminder = db.query(Reminder).filter(Reminder.id == reminder_id, Reminder.user_id == user_id).first()
             if reminder:
                 db.delete(reminder)
                 deleted += 1
@@ -198,11 +198,11 @@ def delete_reminders_tool(ids):
         db.close()
 
 
-def update_reminder_tool(action_data):
+def update_reminder_tool(action_data, user_id):
     reminder_id = action_data.get("id")
     db = SessionLocal()
     try:
-        reminder = db.query(Reminder).filter(Reminder.id == str(reminder_id)).first()
+        reminder = db.query(Reminder).filter(Reminder.id == str(reminder_id), Reminder.user_id == user_id).first()
         if reminder:
             if action_data.get("title"):    reminder.title    = action_data["title"]
             if action_data.get("datetime"): reminder.datetime = datetime.fromisoformat(action_data["datetime"])
@@ -223,7 +223,7 @@ def update_reminder_tool(action_data):
 
 # ─── Agent Loop ───────────────────────────────────────────────────────────────
 
-async def run_agent(messages: list):
+async def run_agent(messages: list, user_id: str):
     now = datetime.now(IST).strftime("%Y-%m-%d %H:%M")
 
     system = f"""{SYSTEM_PROMPT}
@@ -258,7 +258,7 @@ RESPOND ONLY WITH JSON in this format:
             action = action_data.get("action")
 
             if action == "get_reminders":
-                result = get_reminders_tool()
+                result = get_reminders_tool(user_id)
                 full_messages.append({"role": "assistant", "content": text})
                 full_messages.append({"role": "user", "content": f"Here are existing reminders: {json.dumps(result)}"})
 
@@ -277,7 +277,7 @@ RESPOND ONLY WITH JSON in this format:
                 }
 
             elif action == "update_reminder":
-                update_reminder_tool(action_data)
+                update_reminder_tool(action_data, user_id)
                 return {
                     "type": "updated",
                     "text": action_data.get("confirmation", "Reminder updated"),
@@ -285,7 +285,7 @@ RESPOND ONLY WITH JSON in this format:
                 }
 
             elif action == "delete_reminder":
-                delete_reminders_tool(action_data.get("ids", []))
+                delete_reminders_tool(action_data.get("ids", []), user_id)
                 return {
                     "type": "deleted",
                     "text": action_data.get("confirmation", "Reminder deleted"),
