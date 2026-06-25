@@ -1,5 +1,4 @@
 // ─── AUTH GUARD — runs before anything else ────────────────────────────────────
-// If there's no token, kick to login immediately
 ;(function () {
   if (!localStorage.getItem('scheduler_token')) {
     window.location.replace('/login.html')
@@ -7,18 +6,15 @@
 })()
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
-// const API_BASE = 'http://localhost:8000'
-
+const API_BASE        = 'https://adaptive-scheduler-x6nw.onrender.com'
 const VAPID_PUBLIC_KEY = 'BLdUTJ82_k03z93xAJadQ2U58tp-V5ICr_g4Hf_20L6uJ0C9XDnLHxgux-UOJ-QjLMFzoTaP4oTwx5FktGWeSyY'
 
-// ─── AUTH HELPERS ──────────────────────────────────────────────────────────────
+// ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
 function getToken()    { return localStorage.getItem('scheduler_token') || '' }
 function getNickname() { return localStorage.getItem('scheduler_nickname') || 'You' }
 function getEmail()    { return localStorage.getItem('scheduler_email') || '' }
 function isDemo()      { return localStorage.getItem('scheduler_is_demo') === 'true' }
 
-// JSON request headers + auth token
 function getAuthHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -26,7 +22,6 @@ function getAuthHeaders() {
   }
 }
 
-// Called whenever the server says 401 — clear local state and send to login
 function handle401() {
   localStorage.removeItem('scheduler_token')
   localStorage.removeItem('scheduler_nickname')
@@ -43,7 +38,7 @@ function logout() {
 // ─── PUSH SETUP ───────────────────────────────────────────────────────────────
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const base64  = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
   const rawData = atob(base64)
   return new Uint8Array([...rawData].map(c => c.charCodeAt(0)))
 }
@@ -51,7 +46,7 @@ function urlBase64ToUint8Array(base64String) {
 async function initPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
   try {
-    const reg = await navigator.serviceWorker.register('./sw.js')
+    const reg        = await navigator.serviceWorker.register('./sw.js')
     await navigator.serviceWorker.ready
     const permission = await Notification.requestPermission()
     if (permission !== 'granted') return
@@ -73,33 +68,31 @@ async function initPush() {
   }
 }
 
-// ─── Date & Live Clock ───────────────────────────────────────────────────────
+// ─── Date ─────────────────────────────────────────────────────────────────────
 document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-US', {
   weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
 })
 
-// clock started after settings loaded — see bottom of Settings section
-
 // ─── State ────────────────────────────────────────────────────────────────────
 let mediaRecorder = null
-let audioChunks = []
-let recording = false
+let audioChunks   = []
+let recording     = false
 let agentMessages = []
 let awaitingReply = false
-let currentView = 'reminders'
+let currentView   = 'reminders'
 
 // ─── Elements ─────────────────────────────────────────────────────────────────
-const micBtn      = document.getElementById('mic-btn')
-const typeBtn     = document.getElementById('type-btn')
-const typeArea    = document.getElementById('type-area')
-const typeInput   = document.getElementById('type-input')
-const typeSend    = document.getElementById('type-send')
-const chatBubbles = document.getElementById('chat-bubbles')
-const overlay     = document.getElementById('overlay')
-const btnCancel   = document.getElementById('btn-cancel')
-const btnCancel2  = document.getElementById('btn-cancel-2')
-const btnSave     = document.getElementById('btn-save')
-const micToast    = document.getElementById('mic-toast')
+const micBtn       = document.getElementById('mic-btn')
+const typeBtn      = document.getElementById('type-btn')
+const typeArea     = document.getElementById('type-area')
+const typeInput    = document.getElementById('type-input')
+const typeSend     = document.getElementById('type-send')
+const chatBubbles  = document.getElementById('chat-bubbles')
+const overlay      = document.getElementById('overlay')
+const btnCancel    = document.getElementById('btn-cancel')
+const btnCancel2   = document.getElementById('btn-cancel-2')
+const btnSave      = document.getElementById('btn-save')
+const micToast     = document.getElementById('mic-toast')
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 let toastTimer = null
@@ -115,22 +108,18 @@ function setMicState(state) {
   micBtn.classList.remove('recording', 'processing')
   typeBtn.style.display = awaitingReply ? 'flex' : 'none'
   switch (state) {
-    case 'recording':
-      micBtn.classList.add('recording')
-      break
+    case 'recording':  micBtn.classList.add('recording');  break
     case 'processing':
-    case 'thinking':
-      micBtn.classList.add('processing')
-      break
+    case 'thinking':   micBtn.classList.add('processing'); break
   }
 }
 
 // ─── Chat Bubbles ─────────────────────────────────────────────────────────────
 function addBubble(text, role) {
-  const wrap = document.createElement('div')
+  const wrap   = document.createElement('div')
   wrap.className = `bubble-wrap ${role}`
   const bubble = document.createElement('div')
-  bubble.className = `bubble bubble-${role}`
+  bubble.className   = `bubble bubble-${role}`
   bubble.textContent = text
   wrap.appendChild(bubble)
   chatBubbles.appendChild(wrap)
@@ -147,9 +136,9 @@ micBtn.addEventListener('click', async () => {
 
 async function startRecording() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    mediaRecorder = new MediaRecorder(stream)
-    audioChunks = []
+    const stream    = await navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaRecorder   = new MediaRecorder(stream)
+    audioChunks     = []
     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data) }
     mediaRecorder.onstop = async () => {
       const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
@@ -199,14 +188,13 @@ async function handleAudioInput(audioBlob) {
   try {
     const formData = new FormData()
     formData.append('audio', audioBlob, 'recording.webm')
-    // Note: don't set Content-Type for FormData — browser sets it with boundary
     const res = await fetch(`${API_BASE}/transcribe`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${getToken()}` },
       body: formData
     })
     if (res.status === 401) { handle401(); return }
-    const data = await res.json()
+    const data       = await res.json()
     const transcript = data.transcript?.trim()
     if (!transcript) {
       setMicState('idle')
@@ -222,7 +210,6 @@ async function handleAudioInput(audioBlob) {
 }
 
 async function handleTextInput(text) {
-  // cancel detection — reset everything if user says cancel/stop/nevermind
   const cancelWords = ['cancel', 'stop', 'never mind', 'nevermind', 'forget it', 'nope', 'abort']
   if (cancelWords.some(w => text.toLowerCase().includes(w)) && agentMessages.length > 0) {
     resetConversation()
@@ -231,7 +218,6 @@ async function handleTextInput(text) {
   }
 
   addBubble(text, 'user')
-  // prepend settings context to first user message so agent knows time preferences
   const msgContent = agentMessages.length === 0
     ? buildSettingsContext() + '\n' + text
     : text
@@ -256,32 +242,27 @@ async function handleTextInput(text) {
       awaitingReply = true
       addBubble(result.text, 'agent')
       setMicState('idle')
-
     } else if (result.type === 'reminder') {
       awaitingReply = false
       setMicState('idle')
       showConfirmModal(result.data)
-
     } else if (result.type === 'updated') {
       awaitingReply = false
       addBubble(result.text, 'agent')
       setMicState('idle')
       loadReminders()
       setTimeout(resetConversation, 1800)
-
     } else if (result.type === 'deleted') {
       awaitingReply = false
       addBubble(result.text, 'agent')
       setMicState('idle')
       loadReminders()
       setTimeout(resetConversation, 1800)
-
     } else if (result.type === 'error') {
       awaitingReply = false
       addBubble(result.text, 'agent')
       setMicState('idle')
     }
-
   } catch (err) {
     console.error(err)
     awaitingReply = false
@@ -292,20 +273,25 @@ async function handleTextInput(text) {
 
 // ─── Confirm Modal ────────────────────────────────────────────────────────────
 let _pendingExtracted = null
-
-const SAVE_BTN_LABEL = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Reminder`
+const SAVE_BTN_LABEL  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Save Reminder`
 
 function showConfirmModal(extracted) {
-  _pendingExtracted = extracted  // keep full agent data — action_label, pre_alert_minutes, etc.
-  document.getElementById('field-title').value    = extracted.title    || ''
-  document.getElementById('field-location').value = extracted.location || ''
-  document.getElementById('field-type').value     = extracted.type     || 'personal'
-  document.getElementById('field-repeat').value   = extracted.repeat   || 'none'
-  document.getElementById('field-datetime').value = extracted.datetime
+  _pendingExtracted = extracted
+  document.getElementById('field-title').value     = extracted.title    || ''
+  document.getElementById('field-location').value  = extracted.location || ''
+  document.getElementById('field-type').value      = extracted.type     || 'personal'
+  document.getElementById('field-repeat').value    = extracted.repeat   || 'none'
+  document.getElementById('field-datetime').value  = extracted.datetime
     ? extracted.datetime.slice(0, 16) : ''
   document.getElementById('field-pre-alert').value = extracted.pre_alert_minutes ?? ''
   document.getElementById('field-follow-up').value = extracted.follow_up_minutes ?? ''
   overlay.classList.add('show')
+
+  // Tour step 3 — fires when modal opens after user recorded
+  if (isDemo() && _tourStep === 2 && !_tourDone) {
+    _removeTourUI()
+    setTimeout(() => _showTourStep(3), 350)
+  }
 }
 
 function closeModal() {
@@ -313,7 +299,7 @@ function closeModal() {
   resetConversation()
 }
 
-btnCancel.addEventListener('click', closeModal)
+btnCancel.addEventListener('click',  closeModal)
 btnCancel2.addEventListener('click', closeModal)
 
 btnSave.addEventListener('click', async () => {
@@ -344,14 +330,25 @@ btnSave.addEventListener('click', async () => {
       body: JSON.stringify(reminder)
     })
     if (res.status === 401) { handle401(); return }
+    if (!res.ok) {
+      const err = await res.json()
+      alert(err.detail || 'Could not save.')
+      return
+    }
     const data = await res.json()
     if (data.status === 'saved') {
       overlay.classList.remove('show')
       resetConversation()
-      loadReminders()
+      await loadReminders()
+
+      // Tour step 4 — fires after reminder saved and cards are rendered
+      if (isDemo() && _tourStep === 3 && !_tourDone) {
+        setTimeout(() => _showTourStep(4), 500)
+      }
     }
   } catch (err) {
     alert('Could not save. Is the backend running?')
+    console.error(err)
   } finally {
     btnSave.disabled = false
     btnSave.innerHTML = SAVE_BTN_LABEL
@@ -407,8 +404,8 @@ async function loadReminders() {
 
 function filterReminders(reminders) {
   if (currentView === 'reminders') return reminders.filter(r => !r.done && !r.missed)
-  if (currentView === 'missed')     return reminders.filter(r => r.missed && !r.done)
-  if (currentView === 'done')       return reminders.filter(r => r.done === true)
+  if (currentView === 'missed')    return reminders.filter(r => r.missed && !r.done)
+  if (currentView === 'done')      return reminders.filter(r => r.done === true)
   return reminders
 }
 
@@ -426,9 +423,10 @@ function renderReminders(allReminders) {
   if (reminders.length === 0) {
     const labels = {
       reminders: 'No active reminders yet',
-      missed:     'No missed reminders',
-      done:       'Nothing marked done yet'
+      missed:    'No missed reminders',
+      done:      'Nothing marked done yet'
     }
+    const hint = currentView === 'reminders' ? 'Tap the mic button and speak' : ''
     area.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">
@@ -438,7 +436,7 @@ function renderReminders(allReminders) {
           </svg>
         </div>
         <p>${labels[currentView] || 'Nothing here'}</p>
-        <span>Tap the mic button and speak</span>
+        ${hint ? `<span>${hint}</span>` : ''}
       </div>`
     return
   }
@@ -453,8 +451,8 @@ function renderReminders(allReminders) {
       : 'No time set'
 
     const card = document.createElement('div')
-    card.className = `card${r.done ? ' is-done' : ''}`
-    card.dataset.type = r.type
+    card.className      = `card${r.done ? ' is-done' : ''}${isDemo() ? ' demo-reminder' : ''}`
+    card.dataset.type   = r.type
     card.style.animationDelay = `${i * 40}ms`
     card.innerHTML = `
       <div class="cdot" style="background:${typeColors[r.type] || '#aaa'}"></div>
@@ -463,6 +461,7 @@ function renderReminders(allReminders) {
         <div class="csub">${time}${r.location ? ' · ' + r.location : ''}</div>
       </div>
       <div class="card-actions">
+        ${isDemo() ? '<span class="demo-badge">demo</span>' : ''}
         <span class="tag tag-${r.type}">${r.type}</span>
         ${r.repeat !== 'none' ? `<span class="tag tag-rec">${r.repeat}</span>` : ''}
         ${!r.done && currentView !== 'missed' ? `
@@ -510,7 +509,7 @@ function switchView(view) {
   }
 }
 
-// ─── Settings ────────────────────────────────────────────────────────────────
+// ─── Settings ─────────────────────────────────────────────────────────────────
 const SETTINGS_KEY = 'scheduler_settings'
 
 const DEFAULTS = {
@@ -524,16 +523,15 @@ const DEFAULTS = {
 }
 
 function loadSettings() {
-  try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }
-  } catch { return { ...DEFAULTS } }
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') } }
+  catch { return { ...DEFAULTS } }
 }
 
 function saveSettings() {
   const s = {
-    morning:     document.getElementById('s-morning')?.value     || DEFAULTS.morning,
-    evening:     document.getElementById('s-evening')?.value     || DEFAULTS.evening,
-    night:       document.getElementById('s-night')?.value       || DEFAULTS.night,
+    morning:     document.getElementById('s-morning')?.value      || DEFAULTS.morning,
+    evening:     document.getElementById('s-evening')?.value      || DEFAULTS.evening,
+    night:       document.getElementById('s-night')?.value        || DEFAULTS.night,
     inABit:      parseInt(document.getElementById('s-in-a-bit')?.value)      || DEFAULTS.inABit,
     afterAWhile: parseInt(document.getElementById('s-after-a-while')?.value) || DEFAULTS.afterAWhile,
     vibration:   document.getElementById('vibration-toggle')?.classList.contains('on') ?? DEFAULTS.vibration,
@@ -545,12 +543,12 @@ function saveSettings() {
 function populateSettings() {
   const s = loadSettings()
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val }
-  set('s-morning',      s.morning)
-  set('s-evening',      s.evening)
-  set('s-night',        s.night)
-  set('s-in-a-bit',     s.inABit)
-  set('s-after-a-while',s.afterAWhile)
-  set('s-timezone',     s.timezone)
+  set('s-morning',       s.morning)
+  set('s-evening',       s.evening)
+  set('s-night',         s.night)
+  set('s-in-a-bit',      s.inABit)
+  set('s-after-a-while', s.afterAWhile)
+  set('s-timezone',      s.timezone)
   const d1 = document.getElementById('s-in-a-bit-display')
   const d2 = document.getElementById('s-after-a-while-display')
   if (d1) d1.textContent = s.inABit
@@ -558,11 +556,11 @@ function populateSettings() {
   const vt = document.getElementById('vibration-toggle')
   if (vt) { s.vibration ? vt.classList.add('on') : vt.classList.remove('on') }
 
-  // ── Inject Account section once ──────────────────────────────────────────
+  // Inject Account section once
   if (!document.getElementById('account-section')) {
-    const panel = document.getElementById('settings-panel')
+    const panel   = document.getElementById('settings-panel')
     const section = document.createElement('div')
-    section.id = 'account-section'
+    section.id        = 'account-section'
     section.className = 'settings-group'
     section.innerHTML = `
       <div class="settings-label">Account</div>
@@ -580,15 +578,9 @@ function populateSettings() {
         </div>` : ''}
       <div class="settings-item">
         <span>Sign out</span>
-        <button
-          onclick="logout()"
-          style="padding:6px 16px;border-radius:8px;background:var(--mint);border:1.5px solid var(--border);color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background 0.15s"
-          onmouseover="this.style.background='var(--sage)'"
-          onmouseout="this.style.background='var(--mint)'"
-        >Sign out</button>
+        <button onclick="logout()" style="padding:6px 16px;border-radius:8px;background:var(--mint);border:1.5px solid var(--border);color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--sage)'" onmouseout="this.style.background='var(--mint)'">Sign out</button>
       </div>
     `
-    // Insert at top of settings, before all other groups
     panel.insertBefore(section, panel.firstChild)
   }
 }
@@ -600,10 +592,9 @@ function stepValue(id, delta) {
   const min = 1, max = 120
   let val = parseInt(input.value) + delta
   val = Math.max(min, Math.min(max, val))
-  input.value = val
+  input.value         = val
   display.textContent = val
   saveSettings()
-  // haptic feedback on step
   if (loadSettings().vibration && navigator.vibrate) navigator.vibrate(30)
 }
 
@@ -615,16 +606,15 @@ function toggleVibration() {
   saveSettings()
 }
 
-// ─── Clock (defined after DEFAULTS so loadSettings works) ───────────────────
+// ─── Clock ────────────────────────────────────────────────────────────────────
 function updateClock() {
-  const s  = loadSettings()
-  const tz = s.timezone || 'Asia/Kolkata'
+  const s   = loadSettings()
+  const tz  = s.timezone || 'Asia/Kolkata'
   const now = new Date()
   const timeEl = document.getElementById('today-time')
   const tzEl   = document.getElementById('tz-badge')
   if (timeEl) timeEl.textContent = now.toLocaleTimeString('en-US', {
-    hour: 'numeric', minute: '2-digit', second: '2-digit',
-    hour12: true, timeZone: tz
+    hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true, timeZone: tz
   })
   if (tzEl) {
     const shortTz = now.toLocaleTimeString('en-US', { timeZoneName: 'short', timeZone: tz })
@@ -635,48 +625,374 @@ function updateClock() {
 updateClock()
 setInterval(updateClock, 1000)
 
-// Build a settings context string to inject into agent messages
 function buildSettingsContext() {
-  const s  = loadSettings()
-  const tz = s.timezone || 'Asia/Kolkata'
+  const s   = loadSettings()
+  const tz  = s.timezone || 'Asia/Kolkata'
   const now = new Date()
   const currentDateTime = now.toLocaleString('en-US', {
-    timeZone: tz,
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-    hour: 'numeric', minute: '2-digit', hour12: true
+    timeZone: tz, weekday: 'long', year: 'numeric', month: 'long',
+    day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
   })
   return `[Current time: ${currentDateTime} | User preferences: timezone=${tz}, "morning"=${s.morning}, "evening"=${s.evening}, "night"=${s.night}, "in a bit"=${s.inABit} minutes, "after a while"=${s.afterAWhile} minutes]`
 }
 
+// ─── DEMO TOUR ────────────────────────────────────────────────────────────────
+let _tourStep = 0
+let _tourDone = localStorage.getItem('demo_tour_done') === 'true'
+let _tourEl   = null
+let _spotEl   = null
+
+// 8 steps — steps 3 and 4 are auto-triggered by events, the rest use Next button
+const TOUR_STEPS = [
+  {
+    id: 1,
+    title: '👋 Welcome to Scheduler',
+    text:  'A smart reminder app that understands plain language. This quick tour takes about a minute.',
+    target: null,
+    next: 'Start tour →',
+    skip: 'Skip tour'
+  },
+  {
+    id: 2,
+    title: '🎤 Record a reminder',
+    text:  'Tap the mic and speak naturally — try "Remind me to drink water in 30 minutes" or "Take medicine every day at 8pm"',
+    target: '#mic-btn',
+    next: 'Try it now!',
+    isAction: true,   // next dismisses overlay so user can tap mic; tour resumes when modal opens
+    skip: 'Skip'
+  },
+  {
+    id: 3,
+    title: '✏️ Review your reminder',
+    text:  'The AI picked up the details from what you said. Check the title, time, and type — edit anything if needed. Then tap Save.',
+    target: null,
+    next: 'Got it',
+    autoTrigger: true   // fires from showConfirmModal
+  },
+  {
+    id: 4,
+    title: '✅ Mark it done',
+    text:  'Your reminder is saved! When you complete it, tap the ✓ button. Or tap Done directly in the notification when it fires.',
+    target: '.done-btn',
+    next: 'Next →',
+    autoTrigger: true   // fires after reminder saved
+  },
+  {
+    id: 5,
+    title: '⚠️ Missed reminders',
+    text:  'If a reminder fires and you don\'t act on it within an hour, it moves here. Nothing falls through the cracks.',
+    target: '#nav-missed',
+    next: 'Next →'
+  },
+  {
+    id: 6,
+    title: '✓ Done reminders',
+    text:  'Everything you\'ve completed lives here — a satisfying record of things you actually did.',
+    target: '#nav-done',
+    next: 'Next →'
+  },
+  {
+    id: 7,
+    title: '⚙️ Settings',
+    text:  'Set your timezone and customize what "morning" or "in a bit" means — so the AI always gets your timing right.',
+    target: '#nav-settings',
+    next: 'Next →'
+  },
+  {
+    id: 8,
+    title: '🎉 That\'s Scheduler!',
+    text:  'Create a free account to keep your reminders permanently and get real notifications. It takes about 10 seconds.',
+    target: null,
+    next: 'Sign up free →',
+    nextHref: '/login.html',
+    skip: 'Keep exploring'
+  }
+]
+
+function _injectDemoStyles() {
+  if (document.getElementById('demo-styles')) return
+  const style = document.createElement('style')
+  style.id = 'demo-styles'
+  style.textContent = `
+    /* ── Demo reminder card ──────────────────────────────────────────────── */
+    .card.demo-reminder {
+      background: rgba(221,161,94,0.06);
+      border-color: rgba(221,161,94,0.35);
+    }
+    .demo-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 8.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--brown);
+      background: rgba(221,161,94,0.18);
+      border: 1px solid rgba(221,161,94,0.3);
+      border-radius: 20px;
+      padding: 2px 8px;
+      flex-shrink: 0;
+    }
+
+    /* ── Tour overlay & spotlight ────────────────────────────────────────── */
+    .tour-dim {
+      position: fixed;
+      inset: 0;
+      background: rgba(74,53,32,0.62);
+      z-index: 199;
+      pointer-events: all;
+    }
+    .tour-spotlight {
+      position: fixed;
+      border-radius: 14px;
+      box-shadow: 0 0 0 9999px rgba(74,53,32,0.62);
+      z-index: 199;
+      pointer-events: none;
+      transition: all 0.28s ease;
+    }
+
+    /* ── Tour panel ──────────────────────────────────────────────────────── */
+    .tour-panel {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      bottom: calc(68px + 14px + 14px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px 18px 14px;
+      z-index: 200;
+      box-shadow: 0 8px 40px rgba(74,53,32,0.18);
+      animation: tourPanelIn 0.25s ease both;
+      pointer-events: all;
+    }
+    .tour-panel.tour-center {
+      bottom: auto;
+      top: 50%;
+      left: 50%;
+      right: auto;
+      width: calc(100% - 48px);
+      max-width: 360px;
+      transform: translate(-50%, -50%);
+    }
+    @keyframes tourPanelIn {
+      from { opacity:0; transform:translateY(10px) }
+      to   { opacity:1; transform:translateY(0) }
+    }
+    .tour-panel.tour-center {
+      animation: tourCenterIn 0.25s ease both;
+    }
+    @keyframes tourCenterIn {
+      from { opacity:0; transform:translate(-50%,-46%) scale(0.96) }
+      to   { opacity:1; transform:translate(-50%,-50%) scale(1) }
+    }
+
+    .tour-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .tour-counter {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+    .tour-skip-btn {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12px;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 0;
+    }
+    .tour-title {
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .tour-text {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.55;
+      margin-bottom: 14px;
+    }
+    .tour-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .tour-next-btn {
+      flex: 1;
+      padding: 11px 16px;
+      border-radius: 12px;
+      background: var(--brown);
+      color: var(--cream);
+      border: none;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 600;
+      font-size: 13.5px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .tour-next-btn:hover { background: #c48a4a; }
+
+    /* ── Done button pulse on step 4 ─────────────────────────────────────── */
+    .tour-done-pulse {
+      animation: donePulse 1.2s ease-in-out 5;
+    }
+    @keyframes donePulse {
+      0%,100% { box-shadow: none; }
+      50%      { box-shadow: 0 0 0 5px rgba(221,161,94,0.45); border-radius: 8px; }
+    }
+  `
+  document.head.appendChild(style)
+}
+
+function setupDemoMode() {
+  if (!isDemo()) return
+  _injectDemoStyles()
+
+  // Sign up button in page band
+  const band = document.querySelector('.page-band')
+  if (band && !document.getElementById('demo-band-signup')) {
+    const btn  = document.createElement('a')
+    btn.id     = 'demo-band-signup'
+    btn.href   = '/login.html'
+    btn.textContent = 'Sign up free'
+    btn.style.cssText = 'padding:5px 14px;border-radius:20px;background:var(--brown);color:var(--cream);font-size:12px;font-family:"DM Sans",sans-serif;font-weight:600;text-decoration:none;white-space:nowrap;flex-shrink:0'
+    band.appendChild(btn)
+  }
+
+  // Start tour if not yet completed
+  if (!_tourDone) {
+    setTimeout(() => _showTourStep(1), 700)
+  }
+}
+
+function _showTourStep(id) {
+  _removeTourUI()
+  _tourStep = id
+
+  const step      = TOUR_STEPS.find(s => s.id === id)
+  if (!step) return
+
+  const hasTarget = !!(step.target && document.querySelector(step.target))
+  const isCenter  = !hasTarget  // welcome / end / auto-trigger with no target → center card
+
+  const totalSteps = TOUR_STEPS.length
+
+  // ── Spotlight or dim overlay ───────────────────────────────────────────
+  if (hasTarget) {
+    const target = document.querySelector(step.target)
+    const rect   = target.getBoundingClientRect()
+    const pad    = 8
+    _spotEl = document.createElement('div')
+    _spotEl.className = 'tour-spotlight'
+    _spotEl.style.top    = (rect.top    - pad) + 'px'
+    _spotEl.style.left   = (rect.left   - pad) + 'px'
+    _spotEl.style.width  = (rect.width  + pad * 2) + 'px'
+    _spotEl.style.height = (rect.height + pad * 2) + 'px'
+    document.body.appendChild(_spotEl)
+  } else {
+    _spotEl = document.createElement('div')
+    _spotEl.className = 'tour-dim'
+    document.body.appendChild(_spotEl)
+  }
+
+  // ── Panel ──────────────────────────────────────────────────────────────
+  _tourEl = document.createElement('div')
+  _tourEl.className = `tour-panel${isCenter ? ' tour-center' : ''}`
+
+  // Skip button — only on steps that have it
+  const skipHtml = step.skip
+    ? `<button class="tour-skip-btn" onclick="endTour()">${step.skip}</button>`
+    : '<span></span>'
+
+  // Next button action
+  let nextAction
+  if (step.isAction)   nextAction = `onclick="_pauseForAction()"`
+  else if (step.nextHref) nextAction = `onclick="endTour();window.location.href='${step.nextHref}'"`
+  else                 nextAction = `onclick="_nextTourStep()"`
+
+  // End card has a two-button layout
+  const actionsHtml = id === 8
+    ? `<div class="tour-actions">
+         <button class="tour-skip-btn" onclick="endTour()">Keep exploring</button>
+         <button class="tour-next-btn" onclick="endTour();window.location.href='/login.html'">Sign up free →</button>
+       </div>`
+    : `<div class="tour-actions">
+         ${step.skip ? skipHtml : ''}
+         <button class="tour-next-btn" ${nextAction}>${step.next}</button>
+       </div>`
+
+  _tourEl.innerHTML = `
+    <div class="tour-meta">
+      <span class="tour-counter">${id} of ${totalSteps}</span>
+      ${id !== 8 && step.skip ? skipHtml : '<span></span>'}
+    </div>
+    <div class="tour-title">${step.title}</div>
+    <div class="tour-text">${step.text}</div>
+    ${actionsHtml}
+  `
+  document.body.appendChild(_tourEl)
+
+  // Pulse the done button on step 4
+  if (id === 4) {
+    setTimeout(() => {
+      const doneBtn = document.querySelector('.done-btn')
+      if (doneBtn) {
+        doneBtn.classList.add('tour-done-pulse')
+        setTimeout(() => doneBtn.classList.remove('tour-done-pulse'), 6000)
+      }
+    }, 100)
+  }
+}
+
+function _nextTourStep() {
+  const nextId = _tourStep + 1
+  const next   = TOUR_STEPS.find(s => s.id === nextId)
+  if (!next)            { endTour(); return }
+  // Auto-trigger steps fire from events — skip when navigating manually
+  if (next.autoTrigger) { _tourStep = nextId; _nextTourStep(); return }
+  _showTourStep(nextId)
+}
+
+function _pauseForAction() {
+  // User tapped "Try it now!" — dismiss overlay so they can tap mic
+  // _tourStep stays at 2; step 3 fires when the confirm modal opens
+  _removeTourUI()
+  showToast('Tap the mic and say a reminder!')
+}
+
+function endTour() {
+  _removeTourUI()
+  _tourDone = true
+  _tourStep = 0
+  localStorage.setItem('demo_tour_done', 'true')
+}
+
+function _removeTourUI() {
+  if (_tourEl) { _tourEl.remove(); _tourEl = null }
+  if (_spotEl) { _spotEl.remove(); _spotEl = null }
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Show demo banner at top of reminders area if in demo mode
+  // Demo banner at top of reminders area
   if (isDemo()) {
     const banner = document.createElement('div')
-    banner.style.cssText = [
-      'background:rgba(181,131,90,0.1)',
-      'border:1px solid rgba(181,131,90,0.22)',
-      'border-radius:10px',
-      'padding:10px 14px',
-      'margin-bottom:4px',
-      'font-size:12px',
-      'color:var(--muted)',
-      'display:flex',
-      'align-items:center',
-      'gap:8px',
-      'line-height:1.4'
-    ].join(';')
+    banner.style.cssText = 'background:rgba(181,131,90,0.1);border:1px solid rgba(181,131,90,0.22);border-radius:10px;padding:10px 14px;margin-bottom:4px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;line-height:1.4'
     banner.innerHTML = `
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--brown)">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-      <span>You're in demo mode.
-        <a href="/login.html" style="color:var(--brown);font-weight:600;text-decoration:none">Create a free account</a>
-        to keep your reminders.
-      </span>`
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--brown)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>Demo mode — <a href="/login.html" style="color:var(--brown);font-weight:600;text-decoration:none">create a free account</a> to keep your reminders.</span>`
     document.getElementById('reminders-area').before(banner)
   }
 
+  setupDemoMode()
   loadReminders()
   initPush()
 })

@@ -357,9 +357,15 @@
 
       try {
         const endpoint = currentTab === 'login' ? '/login' : '/signup'
+
+        // If signing up from demo mode, send the demo token so the backend
+        // can transfer the demo reminder to the new real account
+        const isDemoMode = localStorage.getItem('scheduler_is_demo') === 'true'
+        const demoToken  = isDemoMode ? localStorage.getItem('scheduler_token') : null
+
         const body = currentTab === 'login'
           ? { email, password }
-          : { email, password, nickname: nickname || null }
+          : { email, password, nickname: nickname || null, demo_token: demoToken }
 
         const res = await fetch(`${API_BASE}${endpoint}`, {
           method: 'POST',

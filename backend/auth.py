@@ -6,16 +6,15 @@ import bcrypt, uuid, time
 router = APIRouter()
 
 # ─── Simple in-memory rate limiter — max 5 attempts per IP per 15 min ─────────
-# Keyed by IP, resets naturally as the dict is small and short-lived.
 _attempts = {}  # { ip: [timestamp, timestamp, ...] }
-RATE_LIMIT = 5
+RATE_LIMIT  = 5
 RATE_WINDOW = 15 * 60  # seconds
 
 
 def _check_rate_limit(ip: str):
-    now = time.time()
+    now      = time.time()
     attempts = _attempts.get(ip, [])
-    attempts = [t for t in attempts if now - t < RATE_WINDOW]  # drop old entries
+    attempts = [t for t in attempts if now - t < RATE_WINDOW]
     if len(attempts) >= RATE_LIMIT:
         raise HTTPException(status_code=429, detail="Too many attempts. Please wait 15 minutes and try again.")
     attempts.append(now)
@@ -23,7 +22,6 @@ def _check_rate_limit(ip: str):
 
 
 def _get_ip(request: Request) -> str:
-    # Render sits behind a proxy — check forwarded header first
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
@@ -40,13 +38,13 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode(), password_hash.encode())
 
 
-# ─── Session helpers ────────────────────────────────────────────────────────────
+# ─── Session helpers ───────────────────────────────────────────────────────────
 
 def create_session(user_id: str) -> str:
     from database import Session as SessionModel
     db = SessionLocal()
     try:
-        token = str(uuid.uuid4())
+        token   = str(uuid.uuid4())
         session = SessionModel(token=token, user_id=user_id, created_at=datetime.utcnow())
         db.add(session)
         db.commit()
@@ -74,15 +72,16 @@ def get_user_from_token(authorization: str | None):
         db.close()
 
 
-# ─── Routes ─────────────────────────────────────────────────────────────────────
+# ─── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/signup")
 def signup(data: dict, request: Request):
     _check_rate_limit(_get_ip(request))
 
-    email    = (data.get("email") or "").strip().lower()
-    password = data.get("password") or ""
-    nickname = (data.get("nickname") or "").strip() or None
+    email      = (data.get("email") or "").strip().lower()
+    password   = data.get("password") or ""
+    nickname   = (data.get("nickname") or "").strip() or None
+    demo_token = data.get("demo_token") or None   # present when signing up from demo mode
 
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Please enter a valid email")
@@ -105,6 +104,33 @@ def signup(data: dict, request: Request):
         )
         db.add(user)
         db.commit()
+
+        # ── Transfer demo reminders to the new real account ────────────────
+        if demo_token:
+            from database import Session as SessionModel
+            demo_session = db.query(SessionModel).filter(
+                SessionModel.token == demo_token
+            ).first()
+            if demo_session:
+                demo_user = db.query(User).filter(
+                    User.id == demo_session.user_id,
+                    User.is_demo == True
+                ).first()
+                if demo_user:
+                    # Move all demo reminders to the real account
+                    db.query(Reminder).filter(
+                        Reminder.user_id == demo_user.id
+                    ).update({"user_id": user.id})
+                    # Clean up — delete demo sessions, push subs, then demo user
+                    db.query(SessionModel).filter(
+                        SessionModel.user_id == demo_user.id
+                    ).delete()
+                    db.query(PushSubscription).filter(
+                        PushSubscription.user_id == demo_user.id
+                    ).delete()
+                    db.delete(demo_user)
+                    db.commit()
+
         token = create_session(user.id)
         return {"token": token, "nickname": user.nickname, "email": user.email}
     finally:
@@ -136,3 +162,25 @@ def me(authorization: str | None = Header(default=None)):
     if not user:
         raise HTTPException(status_code=401, detail="Not logged in")
     return {"nickname": user.nickname, "email": user.email, "is_demo": user.is_demo}
+
+
+@router.post("/demo")
+def create_demo():
+    """Creates a temporary demo user with no email/password. Expires naturally."""
+    db = SessionLocal()
+    try:
+        demo_user = User(
+            id=str(uuid.uuid4()),
+            # unique throwaway email so the unique constraint doesn't trip
+            email=f"demo_{uuid.uuid4().hex[:10]}@demo.local",
+            password_hash="",   # no password — demo users can't log back in
+            nickname="Demo",
+            created_at=datetime.utcnow(),
+            is_demo=True
+        )
+        db.add(demo_user)
+        db.commit()
+        token = create_session(demo_user.id)
+        return {"token": token, "nickname": "Demo"}
+    finally:
+        db.close()

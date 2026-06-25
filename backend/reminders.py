@@ -19,6 +19,15 @@ def save_reminder(data: dict, authorization: str | None = Header(default=None)):
     user = _require_user(authorization)
     db = SessionLocal()
     try:
+        # Demo users are limited to 1 reminder — just enough to see how it works
+        if user.is_demo:
+            existing = db.query(Reminder).filter(Reminder.user_id == user.id).count()
+            if existing >= 1:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Demo limit reached — create a free account to add more reminders!"
+                )
+
         reminder = Reminder(
             id=str(uuid.uuid4()),
             user_id=user.id,
@@ -69,7 +78,10 @@ def snooze_reminder(reminder_id: str, authorization: str | None = Header(default
     user = _require_user(authorization)
     db = SessionLocal()
     try:
-        reminder = db.query(Reminder).filter(Reminder.id == reminder_id, Reminder.user_id == user.id).first()
+        reminder = db.query(Reminder).filter(
+            Reminder.id == reminder_id,
+            Reminder.user_id == user.id
+        ).first()
         if reminder and reminder.datetime:
             reminder.datetime    = reminder.datetime + timedelta(minutes=10)
             reminder.notified    = False
@@ -86,7 +98,10 @@ def mark_done(reminder_id: str, authorization: str | None = Header(default=None)
     user = _require_user(authorization)
     db = SessionLocal()
     try:
-        reminder = db.query(Reminder).filter(Reminder.id == reminder_id, Reminder.user_id == user.id).first()
+        reminder = db.query(Reminder).filter(
+            Reminder.id == reminder_id,
+            Reminder.user_id == user.id
+        ).first()
         if not reminder:
             return {"status": "not found"}
 
