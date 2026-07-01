@@ -1,6 +1,11 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Header
-from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+load_dotenv()   # must run before any local imports that read env vars at import time
+
+from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Request
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from rate_limit import limiter
 from database import init_db
 from agent import run_agent
 from auth import router as auth_router, get_user_from_token
@@ -9,13 +14,16 @@ from push import router as push_router
 from scheduler import check_reminders
 import groq, os, tempfile, pytz
 
-load_dotenv()
-
 IST = pytz.timezone('Asia/Kolkata')
 client = groq.Groq(api_key=os.getenv("GROQ_API_KEY"), timeout=60.0)
 FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
 
+# ─── Rate limiting ─────────────────────────────────────────────────────────────
+# Keyed by IP address. Protects paid endpoints (Groq calls) and write endpoints
+# from being hammered by one client, accidental loops, or a single bad actor.
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,7 +45,8 @@ def root():
 
 
 @app.post("/transcribe")
-async def transcribe(audio: UploadFile = File(...)):
+@limiter.limit("20/minute")
+async def transcribe(request: Request, audio: UploadFile = File(...)):
     audio_bytes = await audio.read()
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
         tmp.write(audio_bytes)
@@ -52,7 +61,8 @@ async def transcribe(audio: UploadFile = File(...)):
 
 
 @app.post("/agent")
-async def agent(data: dict, authorization: str | None = Header(default=None)):
+@limiter.limit("20/minute")
+async def agent(request: Request, data: dict, authorization: str | None = Header(default=None)):
     user = get_user_from_token(authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Please log in")

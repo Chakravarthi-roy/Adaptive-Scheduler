@@ -263,10 +263,12 @@
   </div>
 
   <script>
+    // const API_BASE = 'http://localhost:8000'
     const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
 
-    // If already logged in, skip straight to app
-    if (localStorage.getItem('scheduler_token')) {
+    // If already logged in (real account only), skip straight to app
+    // Demo users must be allowed through so they can create a real account
+    if (localStorage.getItem('scheduler_token') && localStorage.getItem('scheduler_is_demo') !== 'true') {
       window.location.replace('/')
     }
 
@@ -295,11 +297,6 @@
     updateClock()
     setInterval(updateClock, 1000)
 
-    // ── Enter key support ──────────────────────────────────────────────────
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Enter') submitAuth()
-    })
-
     // ── Tab switching ──────────────────────────────────────────────────────
     let currentTab = 'login'
 
@@ -320,6 +317,17 @@
 
       hideError()
     }
+
+    // Pre-select "Create account" tab if arriving from demo mode
+    // (must run AFTER switchTab/currentTab are defined above)
+    if (localStorage.getItem('scheduler_is_demo') === 'true') {
+      switchTab('signup')
+    }
+
+    // ── Enter key support ──────────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitAuth()
+    })
 
     // ── Error handling ─────────────────────────────────────────────────────
     function showError(msg) {

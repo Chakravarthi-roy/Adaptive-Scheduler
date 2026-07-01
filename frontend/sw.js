@@ -93,6 +93,7 @@ self.addEventListener('notificationclick', e => {
   e.notification.close()
 
   const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
+  // const API_BASE = 'http://localhost:8000'
 
   // Body tapped (no action button) — just open the app
   if (!action) {

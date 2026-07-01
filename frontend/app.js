@@ -6,7 +6,8 @@
 })()
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const API_BASE        = 'https://adaptive-scheduler-x6nw.onrender.com'
+// const API_BASE        = 'http://localhost:8000'
+const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
 const VAPID_PUBLIC_KEY = 'BLdUTJ82_k03z93xAJadQ2U58tp-V5ICr_g4Hf_20L6uJ0C9XDnLHxgux-UOJ-QjLMFzoTaP4oTwx5FktGWeSyY'
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -246,6 +247,12 @@ async function handleTextInput(text) {
       awaitingReply = false
       setMicState('idle')
       showConfirmModal(result.data)
+    } else if (result.type === 'answer') {
+      awaitingReply = false
+      addBubble(result.text, 'agent')
+      setMicState('idle')
+      // Don't auto-reset — user might want to ask a follow-up question
+
     } else if (result.type === 'updated') {
       awaitingReply = false
       addBubble(result.text, 'agent')
@@ -450,8 +457,9 @@ function renderReminders(allReminders) {
         })
       : 'No time set'
 
+    const isDemoVisitor = r.is_demo_reminder === true
     const card = document.createElement('div')
-    card.className      = `card${r.done ? ' is-done' : ''}${isDemo() ? ' demo-reminder' : ''}`
+    card.className      = `card${r.done ? ' is-done' : ''}${isDemo() ? ' demo-reminder' : ''}${isDemoVisitor ? ' demo-visitor-card' : ''}`
     card.dataset.type   = r.type
     card.style.animationDelay = `${i * 40}ms`
     card.innerHTML = `
@@ -461,7 +469,7 @@ function renderReminders(allReminders) {
         <div class="csub">${time}${r.location ? ' · ' + r.location : ''}</div>
       </div>
       <div class="card-actions">
-        ${isDemo() ? '<span class="demo-badge">demo</span>' : ''}
+        ${isDemoVisitor ? '<span class="demo-visitor-badge">demo</span>' : ''}
         <span class="tag tag-${r.type}">${r.type}</span>
         ${r.repeat !== 'none' ? `<span class="tag tag-rec">${r.repeat}</span>` : ''}
         ${!r.done && currentView !== 'missed' ? `
@@ -496,15 +504,18 @@ function switchView(view) {
 
   const remArea       = document.getElementById('reminders-area')
   const settingsPanel = document.getElementById('settings-panel')
+  const demoBanner    = document.getElementById('demo-banner')
 
   if (view === 'settings') {
     remArea.style.display       = 'none'
     settingsPanel.style.display = 'block'
     document.getElementById('reminder-count').textContent = ''
+    if (demoBanner) demoBanner.style.display = 'none'
     populateSettings()
   } else {
     remArea.style.display       = ''
     settingsPanel.style.display = 'none'
+    if (demoBanner) demoBanner.style.display = view === 'reminders' ? 'flex' : 'none'
     loadReminders()
   }
 }
@@ -575,11 +586,11 @@ function populateSettings() {
         <div class="settings-item" style="gap:12px">
           <span style="font-size:12px;color:var(--muted);line-height:1.4">Create a free account to keep your reminders</span>
           <a href="/login.html" style="padding:7px 14px;border-radius:9px;background:var(--brown);color:var(--cream);font-size:12px;font-family:'DM Sans',sans-serif;font-weight:600;text-decoration:none;white-space:nowrap;flex-shrink:0">Sign up</a>
-        </div>` : ''}
-      <div class="settings-item">
-        <span>Sign out</span>
-        <button onclick="logout()" style="padding:6px 16px;border-radius:8px;background:var(--mint);border:1.5px solid var(--border);color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--sage)'" onmouseout="this.style.background='var(--mint)'">Sign out</button>
-      </div>
+        </div>` : `
+        <div class="settings-item">
+          <span>Sign out</span>
+          <button onclick="logout()" style="padding:6px 16px;border-radius:8px;background:var(--mint);border:1.5px solid var(--border);color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--sage)'" onmouseout="this.style.background='var(--mint)'">Sign out</button>
+        </div>`}
     `
     panel.insertBefore(section, panel.firstChild)
   }
@@ -642,12 +653,12 @@ let _tourDone = localStorage.getItem('demo_tour_done') === 'true'
 let _tourEl   = null
 let _spotEl   = null
 
-// 8 steps — steps 3 and 4 are auto-triggered by events, the rest use Next button
+// 8 steps — steps 3 and 4 are auto-triggered by events
 const TOUR_STEPS = [
   {
     id: 1,
     title: '👋 Welcome to Scheduler',
-    text:  'A smart reminder app that understands plain language. This quick tour takes about a minute.',
+    text:  'A smart reminder app that understands plain language. Quick tour — one minute.',
     target: null,
     next: 'Start tour →',
     skip: 'Skip tour'
@@ -655,53 +666,53 @@ const TOUR_STEPS = [
   {
     id: 2,
     title: '🎤 Record a reminder',
-    text:  'Tap the mic and speak naturally — try "Remind me to drink water in 30 minutes" or "Take medicine every day at 8pm"',
+    text:  'Tap the mic and speak — try "Remind me to drink water in 30 minutes"',
     target: '#mic-btn',
     next: 'Try it now!',
-    isAction: true,   // next dismisses overlay so user can tap mic; tour resumes when modal opens
-    skip: 'Skip'
+    isAction: true
   },
   {
     id: 3,
-    title: '✏️ Review your reminder',
-    text:  'The AI picked up the details from what you said. Check the title, time, and type — edit anything if needed. Then tap Save.',
+    title: '✏️ Review the details',
+    text:  'AI filled in what you said. Edit anything, then tap Save.',
     target: null,
     next: 'Got it',
-    autoTrigger: true   // fires from showConfirmModal
+    waitForSave: true,
+    autoTrigger: true
   },
   {
     id: 4,
     title: '✅ Mark it done',
-    text:  'Your reminder is saved! When you complete it, tap the ✓ button. Or tap Done directly in the notification when it fires.',
+    text:  'Tap ✓ when you\'ve done it. Or tap Done in the notification.',
     target: '.done-btn',
     next: 'Next →',
-    autoTrigger: true   // fires after reminder saved
+    autoTrigger: true
   },
   {
     id: 5,
-    title: '⚠️ Missed reminders',
-    text:  'If a reminder fires and you don\'t act on it within an hour, it moves here. Nothing falls through the cracks.',
+    title: '⚠️ Missed',
+    text:  'Reminders you didn\'t act on within an hour show up here.',
     target: '#nav-missed',
     next: 'Next →'
   },
   {
     id: 6,
-    title: '✓ Done reminders',
-    text:  'Everything you\'ve completed lives here — a satisfying record of things you actually did.',
+    title: '✓ Done',
+    text:  'Everything you\'ve completed lives here.',
     target: '#nav-done',
     next: 'Next →'
   },
   {
     id: 7,
     title: '⚙️ Settings',
-    text:  'Set your timezone and customize what "morning" or "in a bit" means — so the AI always gets your timing right.',
+    text:  'Set your timezone and what "morning" or "in a bit" means to you.',
     target: '#nav-settings',
     next: 'Next →'
   },
   {
     id: 8,
-    title: '🎉 That\'s Scheduler!',
-    text:  'Create a free account to keep your reminders permanently and get real notifications. It takes about 10 seconds.',
+    title: '🎉 That\'s it!',
+    text:  'Create a free account to keep your reminders and get notifications.',
     target: null,
     next: 'Sign up free →',
     nextHref: '/login.html',
@@ -714,6 +725,24 @@ function _injectDemoStyles() {
   const style = document.createElement('style')
   style.id = 'demo-styles'
   style.textContent = `
+    /* ── Demo reminder card (owner's view of demo users' reminders) ─────── */
+    .card.demo-visitor-card {
+      background: rgba(221,161,94,0.07);
+      border: 1.5px dashed rgba(221,161,94,0.45);
+    }
+    .demo-visitor-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--brown);
+      background: rgba(221,161,94,0.15);
+      border: 1px solid rgba(221,161,94,0.3);
+      border-radius: 20px;
+      padding: 2px 7px;
+      flex-shrink: 0;
+    }
+
     /* ── Demo reminder card ──────────────────────────────────────────────── */
     .card.demo-reminder {
       background: rgba(221,161,94,0.06);
@@ -757,8 +786,8 @@ function _injectDemoStyles() {
       bottom: calc(68px + 14px + 14px);
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 18px 18px 14px;
+      border-radius: 18px;
+      padding: 13px 15px 12px;
       z-index: 200;
       box-shadow: 0 8px 40px rgba(74,53,32,0.18);
       animation: tourPanelIn 0.25s ease both;
@@ -809,16 +838,16 @@ function _injectDemoStyles() {
     .tour-title {
       font-family: 'DM Sans', sans-serif;
       font-weight: 600;
-      font-size: 15px;
+      font-size: 13.5px;
       color: var(--text);
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
     .tour-text {
       font-family: 'DM Sans', sans-serif;
-      font-size: 13px;
+      font-size: 12px;
       color: var(--muted);
-      line-height: 1.55;
-      margin-bottom: 14px;
+      line-height: 1.5;
+      margin-bottom: 11px;
     }
     .tour-actions {
       display: flex;
@@ -827,14 +856,14 @@ function _injectDemoStyles() {
     }
     .tour-next-btn {
       flex: 1;
-      padding: 11px 16px;
-      border-radius: 12px;
+      padding: 9px 14px;
+      border-radius: 11px;
       background: var(--brown);
       color: var(--cream);
       border: none;
       font-family: 'DM Sans', sans-serif;
       font-weight: 600;
-      font-size: 13.5px;
+      font-size: 13px;
       cursor: pointer;
       transition: background 0.15s;
     }
@@ -856,17 +885,6 @@ function setupDemoMode() {
   if (!isDemo()) return
   _injectDemoStyles()
 
-  // Sign up button in page band
-  const band = document.querySelector('.page-band')
-  if (band && !document.getElementById('demo-band-signup')) {
-    const btn  = document.createElement('a')
-    btn.id     = 'demo-band-signup'
-    btn.href   = '/login.html'
-    btn.textContent = 'Sign up free'
-    btn.style.cssText = 'padding:5px 14px;border-radius:20px;background:var(--brown);color:var(--cream);font-size:12px;font-family:"DM Sans",sans-serif;font-weight:600;text-decoration:none;white-space:nowrap;flex-shrink:0'
-    band.appendChild(btn)
-  }
-
   // Start tour if not yet completed
   if (!_tourDone) {
     setTimeout(() => _showTourStep(1), 700)
@@ -880,8 +898,9 @@ function _showTourStep(id) {
   const step      = TOUR_STEPS.find(s => s.id === id)
   if (!step) return
 
-  const hasTarget = !!(step.target && document.querySelector(step.target))
-  const isCenter  = !hasTarget  // welcome / end / auto-trigger with no target → center card
+  const isNavTarget = !!(step.target && step.target.startsWith('#nav-'))
+  const hasTarget   = !!(step.target && document.querySelector(step.target))
+  const isCenter    = !hasTarget  // welcome / end / auto-trigger with no target → center card
 
   const totalSteps = TOUR_STEPS.length
 
@@ -889,7 +908,7 @@ function _showTourStep(id) {
   if (hasTarget) {
     const target = document.querySelector(step.target)
     const rect   = target.getBoundingClientRect()
-    const pad    = 8
+    const pad    = isNavTarget ? 3 : 8
     _spotEl = document.createElement('div')
     _spotEl.className = 'tour-spotlight'
     _spotEl.style.top    = (rect.top    - pad) + 'px'
@@ -907,32 +926,32 @@ function _showTourStep(id) {
   _tourEl = document.createElement('div')
   _tourEl.className = `tour-panel${isCenter ? ' tour-center' : ''}`
 
-  // Skip button — only on steps that have it
+  // Skip button — only in the top-right meta area, only for steps that define one
   const skipHtml = step.skip
     ? `<button class="tour-skip-btn" onclick="endTour()">${step.skip}</button>`
     : '<span></span>'
 
   // Next button action
   let nextAction
-  if (step.isAction)   nextAction = `onclick="_pauseForAction()"`
-  else if (step.nextHref) nextAction = `onclick="endTour();window.location.href='${step.nextHref}'"`
-  else                 nextAction = `onclick="_nextTourStep()"`
+  if (step.isAction)       nextAction = `onclick="_pauseForAction()"`
+  else if (step.waitForSave) nextAction = `onclick="_waitForSave()"`
+  else if (step.nextHref)  nextAction = `onclick="endTour();window.location.href='${step.nextHref}'"`
+  else                     nextAction = `onclick="_nextTourStep()"`
 
-  // End card has a two-button layout
+  // Step 8 end card: two buttons side by side
   const actionsHtml = id === 8
     ? `<div class="tour-actions">
          <button class="tour-skip-btn" onclick="endTour()">Keep exploring</button>
          <button class="tour-next-btn" onclick="endTour();window.location.href='/login.html'">Sign up free →</button>
        </div>`
     : `<div class="tour-actions">
-         ${step.skip ? skipHtml : ''}
          <button class="tour-next-btn" ${nextAction}>${step.next}</button>
        </div>`
 
   _tourEl.innerHTML = `
     <div class="tour-meta">
       <span class="tour-counter">${id} of ${totalSteps}</span>
-      ${id !== 8 && step.skip ? skipHtml : '<span></span>'}
+      ${id !== 8 ? skipHtml : '<span></span>'}
     </div>
     <div class="tour-title">${step.title}</div>
     <div class="tour-text">${step.text}</div>
@@ -968,6 +987,12 @@ function _pauseForAction() {
   showToast('Tap the mic and say a reminder!')
 }
 
+function _waitForSave() {
+  // User tapped "Got it" on the review step — just close the panel
+  // _tourStep stays at 3; step 4 fires from btnSave after reminder is saved
+  _removeTourUI()
+}
+
 function endTour() {
   _removeTourUI()
   _tourDone = true
@@ -985,6 +1010,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Demo banner at top of reminders area
   if (isDemo()) {
     const banner = document.createElement('div')
+    banner.id = 'demo-banner'
     banner.style.cssText = 'background:rgba(181,131,90,0.1);border:1px solid rgba(181,131,90,0.22);border-radius:10px;padding:10px 14px;margin-bottom:4px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;line-height:1.4'
     banner.innerHTML = `
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--brown)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>

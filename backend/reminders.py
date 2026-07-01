@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Request
 from database import SessionLocal, Reminder
 from auth import get_user_from_token
+from rate_limit import limiter
 from datetime import datetime, timedelta
 import json, uuid
 
@@ -15,11 +16,12 @@ def _require_user(authorization):
 
 
 @router.post("/reminders")
-def save_reminder(data: dict, authorization: str | None = Header(default=None)):
+@limiter.limit("30/minute")
+def save_reminder(request: Request, data: dict, authorization: str | None = Header(default=None)):
     user = _require_user(authorization)
-    db = SessionLocal()
+    db   = SessionLocal()
     try:
-        # Demo users are limited to 1 reminder — just enough to see how it works
+        # Demo users: limit to 1 reminder
         if user.is_demo:
             existing = db.query(Reminder).filter(Reminder.user_id == user.id).count()
             if existing >= 1:
@@ -31,6 +33,7 @@ def save_reminder(data: dict, authorization: str | None = Header(default=None)):
         reminder = Reminder(
             id=str(uuid.uuid4()),
             user_id=user.id,
+            is_demo_reminder=user.is_demo,   # flag it so owner can see it separately
             title=data.get("title", ""),
             datetime=datetime.fromisoformat(data["datetime"]) if data.get("datetime") else None,
             location=data.get("location"),
@@ -52,20 +55,30 @@ def save_reminder(data: dict, authorization: str | None = Header(default=None)):
 @router.get("/reminders")
 def get_reminders(authorization: str | None = Header(default=None)):
     user = _require_user(authorization)
-    db = SessionLocal()
+    db   = SessionLocal()
     try:
-        reminders = db.query(Reminder).filter(Reminder.user_id == user.id).order_by(Reminder.datetime).all()
+        # Admin users also see demo reminders from all users (in a different color on the frontend)
+        if user.is_admin:
+            reminders = db.query(Reminder).filter(
+                (Reminder.user_id == user.id) | (Reminder.is_demo_reminder == True)
+            ).order_by(Reminder.datetime).all()
+        else:
+            reminders = db.query(Reminder).filter(
+                Reminder.user_id == user.id
+            ).order_by(Reminder.datetime).all()
+
         return [
             {
-                "id": r.id,
-                "title": r.title,
-                "datetime": r.datetime.isoformat() if r.datetime else None,
-                "location": r.location,
-                "type": r.type,
-                "repeat": r.repeat,
-                "participants": json.loads(r.participants) if r.participants else [],
-                "done": r.done,
-                "missed": r.missed if hasattr(r, "missed") else False
+                "id":               r.id,
+                "title":            r.title,
+                "datetime":         r.datetime.isoformat() if r.datetime else None,
+                "location":         r.location,
+                "type":             r.type,
+                "repeat":           r.repeat,
+                "participants":     json.loads(r.participants) if r.participants else [],
+                "done":             r.done,
+                "missed":           r.missed if hasattr(r, "missed") else False,
+                "is_demo_reminder": r.is_demo_reminder if hasattr(r, "is_demo_reminder") else False
             }
             for r in reminders
         ]
@@ -76,7 +89,7 @@ def get_reminders(authorization: str | None = Header(default=None)):
 @router.post("/reminders/{reminder_id}/snooze")
 def snooze_reminder(reminder_id: str, authorization: str | None = Header(default=None)):
     user = _require_user(authorization)
-    db = SessionLocal()
+    db   = SessionLocal()
     try:
         reminder = db.query(Reminder).filter(
             Reminder.id == reminder_id,
@@ -96,12 +109,18 @@ def snooze_reminder(reminder_id: str, authorization: str | None = Header(default
 @router.patch("/reminders/{reminder_id}/done")
 def mark_done(reminder_id: str, authorization: str | None = Header(default=None)):
     user = _require_user(authorization)
-    db = SessionLocal()
+    db   = SessionLocal()
     try:
-        reminder = db.query(Reminder).filter(
-            Reminder.id == reminder_id,
-            Reminder.user_id == user.id
-        ).first()
+        if user.is_admin:
+            reminder = db.query(Reminder).filter(
+                Reminder.id == reminder_id,
+                (Reminder.user_id == user.id) | (Reminder.is_demo_reminder == True)
+            ).first()
+        else:
+            reminder = db.query(Reminder).filter(
+                Reminder.id == reminder_id,
+                Reminder.user_id == user.id
+            ).first()
         if not reminder:
             return {"status": "not found"}
 

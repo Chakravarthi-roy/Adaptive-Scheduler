@@ -29,10 +29,9 @@ def send_notification(title, body, persistent=False, action=None, action_label=N
         query = db.query(PushSubscription)
         if user_id:
             query = query.filter(PushSubscription.user_id == user_id)
-        sub = query.first()
-        if not sub:
+        subs = query.all()
+        if not subs:
             return {"status": "no subscription found"}
-        subscription = json.loads(sub.subscription_json)
 
         payload = {
             "title": title,
@@ -47,15 +46,32 @@ def send_notification(title, body, persistent=False, action=None, action_label=N
             payload["action"] = action
             payload["action_label"] = action_label
 
-        webpush(
-            subscription_info=subscription,
-            data=json.dumps(payload),
-            vapid_private_key=VAPID_PRIVATE_KEY,
-            vapid_claims={"sub": VAPID_EMAIL}
-        )
-        return {"status": "sent"}
-    except WebPushException as ex:
-        print("push failed:", ex)
-        return {"status": "failed", "error": str(ex)}
+        sent_count = 0
+        last_error = None
+
+        # Send to every device this user has subscribed from — not just the first
+        for sub_row in subs:
+            try:
+                subscription = json.loads(sub_row.subscription_json)
+                webpush(
+                    subscription_info=subscription,
+                    data=json.dumps(payload),
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": VAPID_EMAIL},
+                    ttl=86400   # 24h — push server holds & delivers when device comes back online
+                )
+                sent_count += 1
+            except WebPushException as ex:
+                print("push failed for one subscription:", ex)
+                last_error = str(ex)
+                # If the subscription is dead (expired/unsubscribed), clean it up
+                if ex.response is not None and ex.response.status_code in (404, 410):
+                    db.delete(sub_row)
+
+        db.commit()
+
+        if sent_count > 0:
+            return {"status": "sent", "devices": sent_count}
+        return {"status": "failed", "error": last_error}
     finally:
         db.close()
