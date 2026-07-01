@@ -2,14 +2,13 @@ from fastapi import APIRouter, HTTPException, Header, Request
 from database import SessionLocal, PushSubscription
 from auth import get_user_from_token
 from notification import send_notification
-from rate_limit import limiter
+# from rate_limit import limiter
 import json, uuid
 
 router = APIRouter()
 
-
 @router.post("/subscribe")
-@limiter.limit("10/minute")
+# @limiter.limit("10/minute")
 def subscribe(request: Request, data: dict, authorization: str | None = Header(default=None)):
     user = get_user_from_token(authorization)
     if not user:

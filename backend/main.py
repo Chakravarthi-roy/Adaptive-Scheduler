@@ -3,8 +3,8 @@ load_dotenv()   # must run before any local imports that read env vars at import
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+# from slowapi import _rate_limit_exceeded_handler
+# from slowapi.errors import RateLimitExceeded
 from rate_limit import limiter
 from database import init_db
 from agent import run_agent
@@ -22,8 +22,8 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "*")
 # Keyed by IP address. Protects paid endpoints (Groq calls) and write endpoints
 # from being hammered by one client, accidental loops, or a single bad actor.
 app = FastAPI()
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# app.state.limiter = limiter
+# app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,7 +45,7 @@ def root():
 
 
 @app.post("/transcribe")
-@limiter.limit("20/minute")
+# @limiter.limit("20/minute")
 async def transcribe(request: Request, audio: UploadFile = File(...)):
     audio_bytes = await audio.read()
     with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
@@ -61,7 +61,7 @@ async def transcribe(request: Request, audio: UploadFile = File(...)):
 
 
 @app.post("/agent")
-@limiter.limit("20/minute")
+# @limiter.limit("20/minute")
 async def agent(request: Request, data: dict, authorization: str | None = Header(default=None)):
     user = get_user_from_token(authorization)
     if not user:

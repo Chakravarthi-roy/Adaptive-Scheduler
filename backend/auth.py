@@ -6,22 +6,22 @@ import bcrypt, uuid, time
 router = APIRouter()
 
 # ─── Rate limiter — max 5 attempts per IP per 15 min ──────────────────────────
-_attempts   = {}
-RATE_LIMIT  = 5
-RATE_WINDOW = 15 * 60
+# _attempts   = {}
+# RATE_LIMIT  = 5
+# RATE_WINDOW = 15 * 60
 
 # How long a demo account is allowed to live before cleanup claims it
 DEMO_USER_TTL_HOURS = 24
 
 
-def _check_rate_limit(ip: str):
-    now      = time.time()
-    attempts = _attempts.get(ip, [])
-    attempts = [t for t in attempts if now - t < RATE_WINDOW]
-    if len(attempts) >= RATE_LIMIT:
-        raise HTTPException(status_code=429, detail="Too many attempts. Please wait 15 minutes and try again.")
-    attempts.append(now)
-    _attempts[ip] = attempts
+# def _check_rate_limit(ip: str):
+#     now      = time.time()
+#     attempts = _attempts.get(ip, [])
+#     attempts = [t for t in attempts if now - t < RATE_WINDOW]
+#     if len(attempts) >= RATE_LIMIT:
+#         raise HTTPException(status_code=429, detail="Too many attempts. Please wait 15 minutes and try again.")
+#     attempts.append(now)
+#     _attempts[ip] = attempts
 
 
 def _get_ip(request: Request) -> str:
@@ -122,7 +122,7 @@ def _cleanup_old_demo_users(db):
 
 @router.post("/signup")
 def signup(data: dict, request: Request):
-    _check_rate_limit(_get_ip(request))
+    # _check_rate_limit(_get_ip(request))
 
     email      = (data.get("email") or "").strip().lower()
     password   = data.get("password") or ""
@@ -169,7 +169,7 @@ def signup(data: dict, request: Request):
 
 @router.post("/login")
 def login(data: dict, request: Request):
-    _check_rate_limit(_get_ip(request))
+    # _check_rate_limit(_get_ip(request))
 
     email    = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Header, Request
 from database import SessionLocal, Reminder
 from auth import get_user_from_token
-from rate_limit import limiter
+# from rate_limit import limiter
 from datetime import datetime, timedelta
 import json, uuid
 
@@ -16,7 +16,7 @@ def _require_user(authorization):
 
 
 @router.post("/reminders")
-@limiter.limit("30/minute")
+# @limiter.limit("30/minute")
 def save_reminder(request: Request, data: dict, authorization: str | None = Header(default=None)):
     user = _require_user(authorization)
     db   = SessionLocal()
