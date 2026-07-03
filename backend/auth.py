@@ -199,7 +199,7 @@ def forgot_password(data: dict):
             return {"status": "ok"}
 
         import secrets
-        from email import send_reset_email
+        from email_sender import send_reset_email
         import os
 
         token   = secrets.token_urlsafe(32)
