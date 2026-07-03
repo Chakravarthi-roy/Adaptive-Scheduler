@@ -22,7 +22,9 @@ class User(Base):
     nickname      = Column(String, nullable=True)
     created_at    = Column(DateTime, nullable=True)
     is_demo       = Column(Boolean, default=False)
-    is_admin      = Column(Boolean, default=False)   # set manually in Supabase for your account
+    is_admin      = Column(Boolean, default=False)
+    reset_token         = Column(String, nullable=True)
+    reset_token_expires = Column(DateTime, nullable=True)
 
 
 class Session(Base):

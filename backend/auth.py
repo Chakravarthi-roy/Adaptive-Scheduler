@@ -1,34 +1,15 @@
-from fastapi import APIRouter, HTTPException, Request, Header
+from fastapi import APIRouter, HTTPException, Header
 from database import SessionLocal, User, Reminder, PushSubscription
 from datetime import datetime, timedelta
-import bcrypt, uuid, time
+import bcrypt, uuid
 
 router = APIRouter()
-
-# ─── Rate limiter — max 5 attempts per IP per 15 min ──────────────────────────
-# _attempts   = {}
-# RATE_LIMIT  = 5
-# RATE_WINDOW = 15 * 60
 
 # How long a demo account is allowed to live before cleanup claims it
 DEMO_USER_TTL_HOURS = 24
 
 
-# def _check_rate_limit(ip: str):
-#     now      = time.time()
-#     attempts = _attempts.get(ip, [])
-#     attempts = [t for t in attempts if now - t < RATE_WINDOW]
-#     if len(attempts) >= RATE_LIMIT:
-#         raise HTTPException(status_code=429, detail="Too many attempts. Please wait 15 minutes and try again.")
-#     attempts.append(now)
-#     _attempts[ip] = attempts
 
-
-def _get_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
 
 
 # ─── Password helpers ──────────────────────────────────────────────────────────
@@ -101,16 +82,11 @@ def _cleanup_old_demo_users(db):
 
         if reminders:
             if admin:
-                # Reassign their reminder(s) to the admin account — keeps the
-                # record, is_demo_reminder flag was already set at creation
                 for r in reminders:
                     r.user_id = admin.id
             else:
-                # No admin configured yet — can't safely reassign, skip this
-                # user for now rather than orphan or delete their reminder
                 continue
 
-        # Clean up the demo user's sessions and push subscriptions, then the user itself
         db.query(SessionModel).filter(SessionModel.user_id == demo_user.id).delete()
         db.query(PushSubscription).filter(PushSubscription.user_id == demo_user.id).delete()
         db.delete(demo_user)
@@ -121,9 +97,7 @@ def _cleanup_old_demo_users(db):
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/signup")
-def signup(data: dict, request: Request):
-    # _check_rate_limit(_get_ip(request))
-
+def signup(data: dict):
     email      = (data.get("email") or "").strip().lower()
     password   = data.get("password") or ""
     nickname   = (data.get("nickname") or "").strip() or None
@@ -151,9 +125,6 @@ def signup(data: dict, request: Request):
         db.add(user)
         db.commit()
 
-        # ── Clean up demo session only — demo reminders stay where they are.
-        # They get claimed by the admin account during the next cleanup pass,
-        # not transferred to this new user's account.
         if demo_token:
             from database import Session as SessionModel
             demo_session = db.query(SessionModel).filter(SessionModel.token == demo_token).first()
@@ -168,9 +139,7 @@ def signup(data: dict, request: Request):
 
 
 @router.post("/login")
-def login(data: dict, request: Request):
-    # _check_rate_limit(_get_ip(request))
-
+def login(data: dict):
     email    = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
 
@@ -196,10 +165,6 @@ def me(authorization: str | None = Header(default=None)):
 
 @router.post("/demo")
 def create_demo():
-    """Creates a temporary demo user. Their reminder is flagged is_demo_reminder=True.
-    Old demo users (24h+) are cleaned up automatically on each call — their
-    reminder gets reassigned to the admin account first, then the throwaway
-    account is deleted."""
     db = SessionLocal()
     try:
         _cleanup_old_demo_users(db)
@@ -216,5 +181,66 @@ def create_demo():
         db.commit()
         token = create_session(demo_user.id)
         return {"token": token, "nickname": "Demo"}
+    finally:
+        db.close()
+
+
+@router.post("/forgot-password")
+def forgot_password(data: dict):
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Please enter your email")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        # Always return success even if email not found — prevents user enumeration
+        if not user or user.is_demo:
+            return {"status": "ok"}
+
+        import secrets
+        from email_sender import send_reset_email
+        import os
+
+        token   = secrets.token_urlsafe(32)
+        expires = datetime.utcnow() + timedelta(minutes=30)
+
+        user.reset_token         = token
+        user.reset_token_expires = expires
+        db.commit()
+
+        frontend_url = os.getenv("FRONTEND_URL", "").rstrip("/")
+        send_reset_email(email, token, frontend_url)
+
+        return {"status": "ok"}
+    finally:
+        db.close()
+
+
+@router.post("/reset-password")
+def reset_password(data: dict):
+    token    = (data.get("token") or "").strip()
+    password = data.get("password") or ""
+
+    if not token:
+        raise HTTPException(status_code=400, detail="Invalid reset link")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.reset_token == token).first()
+
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+        if user.reset_token_expires < datetime.utcnow():
+            raise HTTPException(status_code=400, detail="Reset link has expired — please request a new one")
+
+        user.password_hash       = hash_password(password)
+        user.reset_token         = None
+        user.reset_token_expires = None
+        db.commit()
+
+        return {"status": "ok"}
     finally:
         db.close()

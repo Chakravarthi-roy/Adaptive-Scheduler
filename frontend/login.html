@@ -241,13 +241,47 @@
 
         <div class="field">
           <label>Password</label>
-          <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" />
+          <div style="position:relative">
+            <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" style="padding-right:42px;width:100%;box-sizing:border-box" />
+            <button type="button" id="eye-btn" onclick="togglePasswordVisibility()"
+              style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);padding:4px;display:flex;align-items:center">
+              <svg id="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="forgot-link" style="text-align:right;margin-top:-8px;margin-bottom:4px">
+          <button type="button" onclick="showForgotPassword()"
+            style="background:none;border:none;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--muted);cursor:pointer;padding:0;text-decoration:underline">
+            Forgot password?
+          </button>
         </div>
 
         <button class="auth-btn" id="auth-submit" onclick="submitAuth()">Sign in</button>
       </div>
 
-      <!-- Demo Section -->
+      <!-- Forgot Password Panel -->
+      <div id="forgot-panel" style="display:none;width:100%;max-width:400px;margin-top:12px">
+        <div class="auth-card">
+          <p class="auth-heading" style="font-size:18px">Reset password</p>
+          <p class="auth-sub">We'll send a reset link to your email</p>
+          <div class="auth-error" id="forgot-error"></div>
+          <div id="forgot-success" style="display:none;font-size:13px;color:#2d6a4f;background:rgba(45,106,79,0.08);border:1px solid rgba(45,106,79,0.2);border-radius:9px;padding:10px 14px;margin-bottom:14px">
+            Check your inbox — reset link sent!
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="forgot-email" placeholder="your@email.com" autocomplete="email" />
+          </div>
+          <button class="auth-btn" id="forgot-submit" onclick="submitForgotPassword()">Send reset link</button>
+          <button type="button" onclick="hideForgotPassword()"
+            style="width:100%;margin-top:8px;padding:9px;background:none;border:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--muted);cursor:pointer">
+            ← Back to sign in
+          </button>
+        </div>
+      </div>
       <div class="demo-section">
         <div class="demo-divider"><span>or</span></div>
         <button class="btn-demo" id="demo-btn" onclick="tryDemo()">
@@ -263,7 +297,6 @@
   </div>
 
   <script>
-    // const API_BASE = 'http://localhost:8000'
     const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
 
     // If already logged in (real account only), skip straight to app
@@ -404,7 +437,60 @@
     }
 
     // ── Demo mode ──────────────────────────────────────────────────────────
-    async function tryDemo() {
+    // ── Password visibility toggle ──────────────────────────────────────────
+    function togglePasswordVisibility() {
+      const input = document.getElementById('auth-password')
+      const icon  = document.getElementById('eye-icon')
+      const show  = input.type === 'password'
+      input.type  = show ? 'text' : 'password'
+      icon.innerHTML = show
+        ? `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`
+        : `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`
+    }
+
+    // ── Forgot password ────────────────────────────────────────────────────
+    function showForgotPassword() {
+      document.getElementById('forgot-panel').style.display = 'block'
+      document.getElementById('forgot-link').style.display  = 'none'
+      document.getElementById('forgot-email').value         = document.getElementById('auth-email').value || ''
+      document.getElementById('forgot-email').focus()
+    }
+
+    function hideForgotPassword() {
+      document.getElementById('forgot-panel').style.display = 'none'
+      document.getElementById('forgot-link').style.display  = 'block'
+      document.getElementById('forgot-error').classList.remove('show')
+      document.getElementById('forgot-success').style.display = 'none'
+    }
+
+    async function submitForgotPassword() {
+      const email = (document.getElementById('forgot-email').value || '').trim()
+      const errEl = document.getElementById('forgot-error')
+      errEl.classList.remove('show')
+      document.getElementById('forgot-success').style.display = 'none'
+
+      if (!email) { errEl.textContent = 'Please enter your email'; errEl.classList.add('show'); return }
+
+      const btn = document.getElementById('forgot-submit')
+      btn.disabled    = true
+      btn.textContent = 'Sending…'
+
+      try {
+        const res = await fetch(`${API_BASE}/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        })
+        // Always show success — backend never reveals if email exists
+        document.getElementById('forgot-success').style.display = 'block'
+        btn.textContent = 'Sent!'
+      } catch (err) {
+        errEl.textContent = 'Could not connect. Try again.'
+        errEl.classList.add('show')
+        btn.disabled    = false
+        btn.textContent = 'Send reset link'
+      }
+    }
       const btn = document.getElementById('demo-btn')
       btn.disabled = true
       btn.innerHTML = `
@@ -439,7 +525,6 @@
             <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
           Try Demo — no account needed`
-      }
     }
   </script>
 </body>
