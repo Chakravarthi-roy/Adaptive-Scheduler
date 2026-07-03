@@ -1005,6 +1005,15 @@ function _removeTourUI() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Always inject demo visitor card style — needed for admin to see demo reminders in amber
+  const visitorStyle = document.createElement('style')
+  visitorStyle.textContent = `
+    .card.demo-visitor-card {
+      background: rgba(221,161,94,0.07);
+      border: 1.5px dashed rgba(221,161,94,0.45);
+    }
+  `
+  document.head.appendChild(visitorStyle)
   // Demo banner at top of reminders area
   if (isDemo()) {
     const banner = document.createElement('div')
