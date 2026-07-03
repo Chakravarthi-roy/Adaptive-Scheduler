@@ -6,8 +6,7 @@
 })()
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-// const API_BASE        = 'http://localhost:8000'
-const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
+const API_BASE        = 'https://adaptive-scheduler-x6nw.onrender.com'
 const VAPID_PUBLIC_KEY = 'BLdUTJ82_k03z93xAJadQ2U58tp-V5ICr_g4Hf_20L6uJ0C9XDnLHxgux-UOJ-QjLMFzoTaP4oTwx5FktGWeSyY'
 
 // ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
@@ -469,7 +468,6 @@ function renderReminders(allReminders) {
         <div class="csub">${time}${r.location ? ' · ' + r.location : ''}</div>
       </div>
       <div class="card-actions">
-        ${isDemoVisitor ? '<span class="demo-visitor-badge">demo</span>' : ''}
         <span class="tag tag-${r.type}">${r.type}</span>
         ${r.repeat !== 'none' ? `<span class="tag tag-rec">${r.repeat}</span>` : ''}
         ${!r.done && currentView !== 'missed' ? `
