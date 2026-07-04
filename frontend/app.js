@@ -289,6 +289,7 @@ function showConfirmModal(extracted) {
   document.getElementById('field-repeat').value    = extracted.repeat   || 'none'
   document.getElementById('field-datetime').value  = extracted.datetime
     ? extracted.datetime.slice(0, 16) : ''
+  document.getElementById('field-duration').value   = extracted.duration_minutes ?? ''
   document.getElementById('field-pre-alert').value = extracted.pre_alert_minutes ?? ''
   document.getElementById('field-follow-up').value = extracted.follow_up_minutes ?? ''
   overlay.classList.add('show')
@@ -323,6 +324,8 @@ btnSave.addEventListener('click', async () => {
     repeat:            document.getElementById('field-repeat').value,
     participants:      _pendingExtracted?.participants || [],
     action_label:      _pendingExtracted?.action_label || null,
+    duration_minutes:  document.getElementById('field-duration').value !== ''
+                         ? parseInt(document.getElementById('field-duration').value) : null,
     pre_alert_minutes: document.getElementById('field-pre-alert').value !== ''
                          ? parseInt(document.getElementById('field-pre-alert').value) : null,
     follow_up_minutes: document.getElementById('field-follow-up').value !== ''

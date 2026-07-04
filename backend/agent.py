@@ -11,7 +11,7 @@ Workflows:
   query   — answer questions about the schedule (gaps, history, etc.)
 """
 
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from database import SessionLocal, Reminder, User
 import groq, json, os, pytz
 
@@ -60,6 +60,20 @@ def _get_user_tz(user_id: str) -> pytz.BaseTzInfo:
             return pytz.timezone("Asia/Kolkata")
     finally:
         db.close()
+
+
+# ─── Duration defaults ──────────────────────────────────────────────────────────
+# Used only when a reminder has no duration_minutes stored (legacy data, or the
+# user left the modal field blank). "important" is deliberately not defaulted
+# here — the create workflow asks about it once instead, since it drives the
+# follow-up timing. Everything else gets a silent, reasonable assumption.
+_DURATION_FALLBACK = {
+    "casual":  0,
+    "routine": 0,
+    "personal": 30,
+    "health":  30,
+    "important": 60,
+}
 
 
 # ─── Tool Handlers ─────────────────────────────────────────────────────────────
@@ -131,6 +145,8 @@ def update_reminder_tool(action_data: dict, user_id: str) -> dict:
             reminder.pre_alert_minutes = str(action_data["pre_alert_minutes"])
         if action_data.get("follow_up_minutes") is not None:
             reminder.follow_up_minutes = str(action_data["follow_up_minutes"])
+        if action_data.get("duration_minutes") is not None:
+            reminder.duration_minutes = str(action_data["duration_minutes"])
         # Reset notification flags so updated reminder fires again correctly
         reminder.notified       = False
         reminder.pre_alerted    = False
@@ -159,6 +175,183 @@ def delete_reminders_tool(ids: list, user_id: str) -> dict:
         db.close()
 
 
+# ─── Query tools: gaps + history search ─────────────────────────────────────────
+# These do the actual date/time computation in Python. The LLM's job is only to
+# pick the tool and fill structured params (a date, a relative range, a status) —
+# never to do arithmetic over raw timestamps itself.
+
+def _reminder_duration(r) -> int | None:
+    """Real duration if stored; else a type-based fallback for casual/routine
+    (always safe to assume instant); None for anything else, meaning 'unknown'."""
+    stored = getattr(r, "duration_minutes", None)
+    if stored not in (None, ""):
+        try:
+            return int(stored)
+        except (TypeError, ValueError):
+            pass
+    if r.type in ("casual", "routine"):
+        return 0
+    return None
+
+
+def find_schedule_gaps_tool(user_id: str, date_str: str, work_start: str = "07:00", work_end: str = "18:00") -> dict:
+    """
+    Computes real free windows for a given day, in Python — never left to the
+    LLM to infer from a raw list of timestamps.
+
+    Returns:
+      {
+        "window": "07:00–18:00",
+        "gaps": [{"start": "...", "end": "...", "duration_minutes": ...}, ...],
+        "unknown_duration": [{"id","title","datetime","type"}, ...]  # needs a
+            duration to compute precisely; treated with a fallback for now.
+      }
+    """
+    try:
+        target_date = date.fromisoformat(date_str)
+    except (TypeError, ValueError):
+        target_date = date.today()
+
+    ws_h, ws_m = map(int, work_start.split(":"))
+    we_h, we_m = map(int, work_end.split(":"))
+    window_start = datetime.combine(target_date, datetime.min.time()).replace(hour=ws_h, minute=ws_m)
+    window_end   = datetime.combine(target_date, datetime.min.time()).replace(hour=we_h, minute=we_m)
+
+    db = SessionLocal()
+    try:
+        day_start = datetime.combine(target_date, datetime.min.time())
+        day_end   = day_start + timedelta(days=1)
+        reminders = db.query(Reminder).filter(
+            Reminder.user_id == user_id,
+            Reminder.datetime >= day_start,
+            Reminder.datetime < day_end
+        ).order_by(Reminder.datetime).all()
+
+        busy = []
+        unknown = []
+        for r in reminders:
+            dur = _reminder_duration(r)
+            if dur is None:
+                unknown.append({
+                    "id": r.id, "title": r.title,
+                    "datetime": r.datetime.isoformat(), "type": r.type
+                })
+                dur = _DURATION_FALLBACK.get(r.type, 30)  # used only to keep the gap math sane
+            start = r.datetime
+            end   = start + timedelta(minutes=dur)
+            # clip to the working window
+            start = max(start, window_start)
+            end   = min(end, window_end)
+            if end > start:
+                busy.append((start, end))
+
+        busy.sort()
+        merged = []
+        for start, end in busy:
+            if merged and start <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+            else:
+                merged.append((start, end))
+
+        gaps = []
+        cursor = window_start
+        for start, end in merged:
+            if start > cursor:
+                gaps.append((cursor, start))
+            cursor = max(cursor, end)
+        if cursor < window_end:
+            gaps.append((cursor, window_end))
+
+        gaps = [(s, e) for s, e in gaps if (e - s) >= timedelta(minutes=10)]
+
+        return {
+            "window": f"{work_start}–{work_end}",
+            "gaps": [
+                {
+                    "start": s.strftime("%I:%M %p"),
+                    "end":   e.strftime("%I:%M %p"),
+                    "duration_minutes": int((e - s).total_seconds() // 60)
+                }
+                for s, e in gaps
+            ],
+            "unknown_duration": unknown
+        }
+    finally:
+        db.close()
+
+
+def _resolve_relative_range(relative: str, today: date) -> tuple[date, date] | None:
+    """Turns a coarse relative label (from the LLM) into exact date bounds.
+    All the actual date math lives here, once, instead of inside a prompt."""
+    if relative == "today":
+        return today, today
+    if relative == "yesterday":
+        y = today - timedelta(days=1)
+        return y, y
+    if relative == "this_week":
+        start = today - timedelta(days=today.weekday())
+        return start, today
+    if relative == "last_week":
+        this_start = today - timedelta(days=today.weekday())
+        last_start = this_start - timedelta(days=7)
+        last_end   = this_start - timedelta(days=1)
+        return last_start, last_end
+    if relative == "this_month":
+        return today.replace(day=1), today
+    if relative == "last_month":
+        first_this = today.replace(day=1)
+        last_end   = first_this - timedelta(days=1)
+        last_start = last_end.replace(day=1)
+        return last_start, last_end
+    return None  # "all" / unrecognized → no date filter
+
+
+def search_reminders_tool(user_id: str, query_text: str | None = None, relative_range: str | None = None,
+                           status: str | None = None) -> list:
+    """
+    General-purpose schedule search — covers "did I attend X last week",
+    "what did I do yesterday", "how many things did I mark done last month",
+    all through one flexible, deterministic filter instead of a dozen
+    one-off tools.
+    """
+    db = SessionLocal()
+    try:
+        q = db.query(Reminder).filter(Reminder.user_id == user_id)
+
+        if query_text:
+            q = q.filter(Reminder.title.ilike(f"%{query_text}%"))
+
+        if relative_range:
+            bounds = _resolve_relative_range(relative_range, date.today())
+            if bounds:
+                start_date, end_date = bounds
+                start_dt = datetime.combine(start_date, datetime.min.time())
+                end_dt   = datetime.combine(end_date, datetime.min.time()) + timedelta(days=1)
+                q = q.filter(Reminder.datetime >= start_dt, Reminder.datetime < end_dt)
+
+        if status == "done":
+            q = q.filter(Reminder.done == True)
+        elif status == "missed":
+            q = q.filter(Reminder.missed == True)
+        elif status == "active":
+            q = q.filter(Reminder.done == False, Reminder.missed == False)
+
+        reminders = q.order_by(Reminder.datetime).all()
+        return [
+            {
+                "id":       r.id,
+                "title":    r.title,
+                "datetime": r.datetime.isoformat() if r.datetime else None,
+                "type":     r.type,
+                "done":     r.done,
+                "missed":   getattr(r, "missed", False)
+            }
+            for r in reminders
+        ]
+    finally:
+        db.close()
+
+
 # ─── Workflow Prompts ──────────────────────────────────────────────────────────
 # Each prompt only describes what that workflow needs — no noise from others.
 # Shared formatting rules are appended to keep individual prompts short.
@@ -166,7 +359,11 @@ def delete_reminders_tool(ids: list, user_id: str) -> dict:
 _SHARED = """
 Respond ONLY with valid JSON — no extra text, no markdown, no code fences.
 Strip filler words like ra, yaar, na, bro, da from any titles.
-Be concise and conversational in any confirmation, question, or answer."""
+Be concise and conversational in any confirmation, question, or answer.
+IMPORTANT: Before calling ask_user, check earlier assistant messages in this
+conversation. If you already asked a clarifying question and the user's reply
+didn't resolve it, DO NOT ask it again — proceed with your best reasonable
+assumption instead. Never repeat the same clarifying question twice."""
 
 
 CREATE_PROMPT = """You are Nudge — a smart reminder assistant. Your only job right now is to create a new reminder.
@@ -174,7 +371,7 @@ CREATE_PROMPT = """You are Nudge — a smart reminder assistant. Your only job r
 WORKFLOW:
 1. Call get_reminders to see the existing schedule (resolves relative times like "after my exam")
 2. Extract everything you can from what the user said and infer the rest
-3. Only call ask_user if the time/date is completely missing AND cannot be inferred
+3. Only call ask_user if the time/date is completely missing AND cannot be inferred, OR if type is "important" and duration is genuinely unclear (see DURATION RULES) — ask about ONE thing at a time, and never ask the same question twice in this conversation
 4. Call create_reminder with all fields filled
 
 TIME RULES:
@@ -191,6 +388,13 @@ TYPE — pick the single best fit:
 - personal: specific purposeful one-off tasks (buy X, call Y, pick up Z)
 - casual: vague time-based nudge with nothing specific riding on it
 
+DURATION RULES — how long the task itself takes, in minutes:
+- Extract directly if stated ("1 hour meeting" → 60, "30 min call" → 30)
+- 0 for casual/routine — these have no real duration (drink water, stretch, check messages)
+- For health/personal with no stated duration, estimate a reasonable default (e.g. 30) — do NOT ask, just estimate
+- For type == "important" specifically: if duration is not stated and cannot be reasonably inferred from context, ask_user ONCE (e.g. "How long is the exam?"). If you already asked this in the conversation and got no clear answer, default to 60 and move on — never ask twice
+- This value also drives the follow-up default below
+
 ACTION LABEL — what the user physically DOES when the reminder fires:
 - Specific, under 5 words, emoji if it fits naturally
 - "Having lunch 🍜" not "Done ✓" for lunch
@@ -205,15 +409,15 @@ FOLLOW-UP — only if completion tracking matters:
 - 0 for: casual reminders, simple one-second actions, vague nudges
 - 10 for: medication
 - 15–20 for: send/submit/reply tasks
-- 60 for: meetings or exams without a stated duration
-- Default to 0.
+- For important/health tasks where duration_minutes is known or estimated: default to duration_minutes + 10, so the nudge fires after the task likely finished rather than at a flat guess
+- Default to 0 otherwise.
 
 NEVER ask for location, participants, or other optional fields — leave them empty.
 
 Valid responses:
 {"action": "get_reminders"}
 {"action": "ask_user", "question": "..."}
-{"action": "create_reminder", "title": "...", "datetime": "...", "location": "", "type": "...", "repeat": "none", "participants": [], "action_label": "...", "pre_alert_minutes": 0, "follow_up_minutes": 0}
+{"action": "create_reminder", "title": "...", "datetime": "...", "location": "", "type": "...", "repeat": "none", "participants": [], "action_label": "...", "duration_minutes": 0, "pre_alert_minutes": 0, "follow_up_minutes": 0}
 """ + _SHARED
 
 
@@ -231,7 +435,7 @@ WORKFLOW:
 Valid responses:
 {"action": "get_reminders"}
 {"action": "ask_user", "question": "..."}
-{"action": "update_reminder", "id": "...", "title": "...", "datetime": "...", "location": "...", "pre_alert_minutes": 0, "follow_up_minutes": 0, "confirmation": "..."}
+{"action": "update_reminder", "id": "...", "title": "...", "datetime": "...", "location": "...", "duration_minutes": 0, "pre_alert_minutes": 0, "follow_up_minutes": 0, "confirmation": "..."}
 """ + _SHARED
 
 
@@ -250,24 +454,31 @@ Valid responses:
 """ + _SHARED
 
 
-QUERY_PROMPT = """You are Nudge — a smart reminder assistant. Your only job right now is to answer a question about the user's schedule or history.
+QUERY_PROMPT = """You are Nudge — a smart reminder assistant. Your only job right now is to answer a question about the user's schedule — past, present, or free time — using tools that already computed the real answer. You never do date/time arithmetic yourself.
 
-WORKFLOW:
-1. Call get_all_reminders to get the full history — active, done, and missed
-2. Think carefully about what the user is asking
-3. Call answer_user with a clear, specific, friendly answer
+TOOLS:
+- find_gaps: for "do I have a gap / free time / any room today". Give it a "date" (YYYY-MM-DD, resolved from words like "today"/"tomorrow"). It checks a fixed 07:00–18:00 window and returns the actual free windows already computed. If the user's own phrasing implies a different range ("free after 8pm", "gap this morning"), pass "work_start"/"work_end" to match that instead of the default.
+- search_reminders: for everything else — "did I attend X", "what did I do yesterday", "how many things last month". Give it any combination of "query_text" (fuzzy title match), "relative_range" (one of: today, yesterday, this_week, last_week, this_month, last_month, all), and "status" (done, missed, active).
+- get_all_reminders: only if the above two genuinely don't cover it.
+
+GAP-ANSWER RULES:
+- Always state the window you checked, e.g. "Between 7am and 6pm, you're free from 2 to 4:30."
+- find_gaps may return "unknown_duration" reminders — these are ones where duration couldn't be determined, so a fallback estimate was used to compute the gaps you got back.
+  - If there are 1–2 of them and their duration could meaningfully change the answer, you may ask_user about them ONCE, at most 2 at a time — never more, and never repeat a question about the same reminder if you've already asked in this conversation.
+  - If there are more than 2, ask about the 2 most relevant to the question, get an answer, and proceed with fallback estimates for the rest — do not interrogate the user about every single one.
+  - If the user doesn't give a clear duration when asked, proceed with the fallback and answer anyway — do not ask again.
 
 ANSWERING GUIDE:
-- "do I have gaps today?" → look at today's reminders by time, identify free windows between them
-- "did I attend X / have I done X?" → check the done/missed status of that reminder
-- "what do I have tomorrow?" → filter by tomorrow's date, list them with times
-- "how many reminders do I have?" → count active (done=false, missed=false) ones
-- Be specific with times. Keep it conversational. Don't list everything unless they asked for a list.
+- Be specific with times/dates. Keep it conversational. Don't list everything unless they asked for a list.
 - If nothing matches what they asked, say so directly — don't make things up.
+- Alongside your narrated answer, include "items": the raw list of reminders/gaps the tools returned that back up your answer (or [] if none apply) — this is structured evidence, not for you to re-summarize, just pass through what's relevant.
 
 Valid responses:
+{"action": "find_gaps", "date": "YYYY-MM-DD", "work_start": "07:00", "work_end": "18:00"}
+{"action": "search_reminders", "query_text": "...", "relative_range": "...", "status": "..."}
 {"action": "get_all_reminders"}
-{"action": "answer_user", "text": "..."}
+{"action": "ask_user", "question": "..."}
+{"action": "answer_user", "text": "...", "items": [...]}
 """ + _SHARED
 
 
@@ -285,8 +496,16 @@ async def _run_loop(messages: list, system: str, user_id: str, now_str: str) -> 
     """
     Single reusable loop used by all four workflows.
     System prompt goes in the 'system' role — not smuggled as a user message.
-    Returns original messages (without system context) so the frontend
-    can safely accumulate them for multi-turn conversations.
+
+    IMPORTANT: every return carries full_messages[1:] (the whole conversation
+    minus the system prompt) — NOT the bare input `messages`. The previous
+    version returned the original input only, which silently dropped the
+    assistant's own tool calls, fetched data, and prior questions from the
+    history sent back next turn. That meant the model had no memory of what
+    it had already asked or fetched, and would re-ask the same clarifying
+    question or re-fetch the same data every turn. Keeping full_messages
+    intact is what lets the model recognize "I already asked this" and move
+    on instead of looping.
     """
     full_messages = [
         {"role": "system", "content": f"{system}\n\nCurrent date and time: {now_str}"}
@@ -334,18 +553,42 @@ async def _run_loop(messages: list, system: str, user_id: str, now_str: str) -> 
                     "content": f"Full reminder history (including done and missed): {json.dumps(result)}"
                 })
 
+            elif action == "find_gaps":
+                result = find_schedule_gaps_tool(
+                    user_id,
+                    data.get("date"),
+                    data.get("work_start", "07:00"),
+                    data.get("work_end", "18:00")
+                )
+                full_messages.append({
+                    "role": "user",
+                    "content": f"Computed schedule gaps: {json.dumps(result)}"
+                })
+
+            elif action == "search_reminders":
+                result = search_reminders_tool(
+                    user_id,
+                    query_text=data.get("query_text"),
+                    relative_range=data.get("relative_range"),
+                    status=data.get("status")
+                )
+                full_messages.append({
+                    "role": "user",
+                    "content": f"Search results: {json.dumps(result)}"
+                })
+
             elif action == "ask_user":
                 return {
                     "type": "question",
                     "text": data.get("question", "Can you tell me a bit more?"),
-                    "messages": messages   # original only — no system context
+                    "messages": full_messages[1:]
                 }
 
             elif action == "create_reminder":
                 return {
                     "type": "reminder",
                     "data": data,
-                    "messages": messages
+                    "messages": full_messages[1:]
                 }
 
             elif action == "update_reminder":
@@ -353,7 +596,7 @@ async def _run_loop(messages: list, system: str, user_id: str, now_str: str) -> 
                 return {
                     "type": "updated",
                     "text": data.get("confirmation", "Done!"),
-                    "messages": messages
+                    "messages": full_messages[1:]
                 }
 
             elif action == "delete_reminder":
@@ -361,14 +604,15 @@ async def _run_loop(messages: list, system: str, user_id: str, now_str: str) -> 
                 return {
                     "type": "deleted",
                     "text": data.get("confirmation", "Deleted."),
-                    "messages": messages
+                    "messages": full_messages[1:]
                 }
 
             elif action == "answer_user":
                 return {
                     "type": "answer",
                     "text": data.get("text", ""),
-                    "messages": messages
+                    "items": data.get("items", []),
+                    "messages": full_messages[1:]
                 }
 
             else:

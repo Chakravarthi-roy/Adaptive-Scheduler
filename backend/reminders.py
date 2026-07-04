@@ -41,6 +41,7 @@ def save_reminder(request: Request, data: dict, authorization: str | None = Head
             repeat=data.get("repeat", "none"),
             participants=json.dumps(data.get("participants", [])),
             action_label=data.get("action_label") or None,
+            duration_minutes=data.get("duration_minutes") if data.get("duration_minutes") not in (None, "") else None,
             pre_alert_minutes=data.get("pre_alert_minutes") if data.get("pre_alert_minutes") else None,
             follow_up_minutes=data.get("follow_up_minutes") if data.get("follow_up_minutes") else None,
             done=False
@@ -76,6 +77,7 @@ def get_reminders(authorization: str | None = Header(default=None)):
                 "type":             r.type,
                 "repeat":           r.repeat,
                 "participants":     json.loads(r.participants) if r.participants else [],
+                "duration_minutes": r.duration_minutes if hasattr(r, "duration_minutes") else None,
                 "done":             r.done,
                 "missed":           r.missed if hasattr(r, "missed") else False,
                 "is_demo_reminder": r.is_demo_reminder if hasattr(r, "is_demo_reminder") else False

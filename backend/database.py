@@ -52,6 +52,7 @@ class Reminder(Base):
     follow_up_sent   = Column(Boolean, default=False)
     missed           = Column(Boolean, default=False)
     action_label     = Column(String, nullable=True)
+    duration_minutes = Column(String, nullable=True)   # how long the task itself takes; NULL = unknown/legacy
     pre_alert_minutes = Column(String, nullable=True)
     follow_up_minutes = Column(String, nullable=True)
     is_demo_reminder = Column(Boolean, default=False)  # demo user's reminder, visible to admin only
