@@ -9,7 +9,7 @@ Supabase for Database
 Hosted on Render. Link: 
 
 Main Workflow:
-Voice -> transcribe -> keyword extraction used to create the reminder -> create reminder -> fire reminder -> notification button click identification
+Voice -> transcribe -> keyword extraction used to create the reminder -> create reminder -> fire reminder -> notification
 
 So, basically the whole workflow goes down to 
 Reminder creation, Reminder Firing
@@ -56,3 +56,9 @@ Let's break them one by one
 8. Demo mode
     A nice demo mode where u will get a walkthrough of the application, just the tour of the main & basic ones which appear to the users to give them an idea of what they are.
 
+
+There is more to this... Upcoming
+
+
+It is deployed on render! URL: https://adaptive-scheduler-frontend.onrender.com/
+Please check it out and suggest the issues by creating an issue if would like. 
