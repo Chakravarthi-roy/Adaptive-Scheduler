@@ -13,7 +13,8 @@ Workflows:
 
 from datetime import datetime, date, timedelta
 from database import SessionLocal, Reminder, User
-import groq, json, os, pytz
+from sqlalchemy import or_
+import groq, json, os, pytz, re
 
 client = groq.Groq(api_key=os.getenv("GROQ_API_KEY"), timeout=60.0)
 
@@ -319,7 +320,26 @@ def search_reminders_tool(user_id: str, query_text: str | None = None, relative_
         q = db.query(Reminder).filter(Reminder.user_id == user_id)
 
         if query_text:
-            q = q.filter(Reminder.title.ilike(f"%{query_text}%"))
+            # Token-based OR match, not a rigid whole-phrase match. The LLM might
+            # pass "attended the wedding" while the actual title is "go to the
+            # wedding" — a literal substring match on the full phrase would find
+            # nothing even though "wedding" clearly matches. Strip filler/verb
+            # words and match on any remaining significant word instead.
+            _stopwords = {
+                "a", "an", "the", "i", "did", "do", "does", "does", "attend",
+                "attended", "attending", "went", "go", "going", "gone", "to",
+                "for", "on", "in", "at", "have", "has", "had", "my", "this",
+                "that", "of", "was", "were", "is", "are", "with", "and"
+            }
+            tokens = [
+                w for w in re.findall(r"[a-zA-Z0-9']+", query_text.lower())
+                if w not in _stopwords and len(w) > 1
+            ]
+            if tokens:
+                q = q.filter(or_(*[Reminder.title.ilike(f"%{t}%") for t in tokens]))
+            else:
+                # every word was a stopword (rare) — fall back to the raw phrase
+                q = q.filter(Reminder.title.ilike(f"%{query_text}%"))
 
         if relative_range:
             bounds = _resolve_relative_range(relative_range, date.today())
@@ -458,7 +478,7 @@ QUERY_PROMPT = """You are Nudge — a smart reminder assistant. Your only job ri
 
 TOOLS:
 - find_gaps: for "do I have a gap / free time / any room today". Give it a "date" (YYYY-MM-DD, resolved from words like "today"/"tomorrow"). It checks a fixed 07:00–18:00 window and returns the actual free windows already computed. If the user's own phrasing implies a different range ("free after 8pm", "gap this morning"), pass "work_start"/"work_end" to match that instead of the default.
-- search_reminders: for everything else — "did I attend X", "what did I do yesterday", "how many things last month". Give it any combination of "query_text" (fuzzy title match), "relative_range" (one of: today, yesterday, this_week, last_week, this_month, last_month, all), and "status" (done, missed, active).
+- search_reminders: for everything else — "did I attend X", "what did I do yesterday", "how many things last month". Give it any combination of "query_text" (the core subject word/phrase only, e.g. "wedding" not "attended the wedding" — matching is fuzzy but a tighter keyword works better), "relative_range" (one of: today, yesterday, this_week, last_week, this_month, last_month, all), and "status" (done, missed, active).
 - get_all_reminders: only if the above two genuinely don't cover it.
 
 GAP-ANSWER RULES:
@@ -470,7 +490,8 @@ GAP-ANSWER RULES:
 
 ANSWERING GUIDE:
 - Be specific with times/dates. Keep it conversational. Don't list everything unless they asked for a list.
-- If nothing matches what they asked, say so directly — don't make things up.
+- If a search comes back empty, that IS your answer — tell the user directly you don't see a matching reminder (e.g. "I don't see a wedding reminder around then"). Do NOT ask a leading confirmation question like "do you remember doing X?" as a substitute for an empty result — that's guessing, not answering from data.
+- Only use ask_user in this workflow when search_reminders/find_gaps returned MULTIPLE plausible matches and you genuinely can't tell which one the user means, or when duration is missing per the GAP-ANSWER RULES above. Never use it to paper over a search that found nothing.
 - Alongside your narrated answer, include "items": the raw list of reminders/gaps the tools returned that back up your answer (or [] if none apply) — this is structured evidence, not for you to re-summarize, just pass through what's relevant.
 
 Valid responses:
