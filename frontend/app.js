@@ -79,6 +79,7 @@ let audioChunks   = []
 let recording     = false
 let agentMessages = []
 let awaitingReply = false
+let awaitingCloseConfirmation = false   // true right after an 'answer' — watching for thanks/no
 let currentView   = 'reminders'
 
 // ─── Elements ─────────────────────────────────────────────────────────────────
@@ -88,6 +89,7 @@ const typeArea     = document.getElementById('type-area')
 const typeInput    = document.getElementById('type-input')
 const typeSend     = document.getElementById('type-send')
 const chatBubbles  = document.getElementById('chat-bubbles')
+const chatCloseBtn = document.getElementById('chat-close-btn')
 const overlay      = document.getElementById('overlay')
 const btnCancel    = document.getElementById('btn-cancel')
 const btnCancel2   = document.getElementById('btn-cancel-2')
@@ -124,9 +126,24 @@ function addBubble(text, role) {
   wrap.appendChild(bubble)
   chatBubbles.appendChild(wrap)
   chatBubbles.scrollTop = chatBubbles.scrollHeight
+  updateChatPanelVisibility()
 }
 
-function clearBubbles() { chatBubbles.innerHTML = '' }
+function clearBubbles() {
+  chatBubbles.innerHTML = ''
+  updateChatPanelVisibility()
+}
+
+// Opaque backdrop + close button both track "is there an actual conversation
+// on screen right now" — same condition, one helper, called after every
+// bubble add/clear so they can never drift out of sync with each other.
+function updateChatPanelVisibility() {
+  const hasContent = chatBubbles.children.length > 0
+  chatBubbles.classList.toggle('active', hasContent)
+  chatCloseBtn.style.display = hasContent ? 'flex' : 'none'
+}
+
+chatCloseBtn.addEventListener('click', () => resetConversation())
 
 // ─── Recording ────────────────────────────────────────────────────────────────
 micBtn.addEventListener('click', async () => {
@@ -209,7 +226,44 @@ async function handleAudioInput(audioBlob) {
   }
 }
 
+// Purely local detection — same reasoning as the intent router: comparing a
+// string against a short word list costs microseconds and doesn't need a
+// round-trip to the LLM just to notice someone said "thanks."
+const _THANKS_WORDS = ['thank you', 'thanks', 'thankyou', 'thnx', 'tq', 'thx']
+const _CLOSE_WORDS  = ['no', 'nope', 'nah', "that's all", 'thats all', "i'm good", 'im good', 'nothing else', 'no thanks', 'all good']
+
+function _isThanks(t) {
+  const lower = t.toLowerCase().trim()
+  return _THANKS_WORDS.some(w => lower === w || lower.startsWith(w + ' ') || lower.startsWith(w + '!'))
+}
+function _isCloseSignal(t) {
+  const lower = t.toLowerCase().trim()
+  return _CLOSE_WORDS.some(w => lower === w || lower.startsWith(w + ' ') || lower.startsWith(w + '!'))
+}
+
 async function handleTextInput(text) {
+  // If we just answered a question and are watching for "thanks"/"no", handle
+  // it locally — no need to burn a backend call on a closing pleasantry.
+  // Anything that ISN'T a clear thanks/close signal falls through and is
+  // treated as a genuine follow-up question, sent to the backend as normal.
+  if (awaitingCloseConfirmation) {
+    if (_isThanks(text)) {
+      addBubble(text, 'user')
+      addBubble("You're welcome! Anything else you'd like to know?", 'agent')
+      // stay in awaitingCloseConfirmation — still watching for a close signal
+      return
+    }
+    if (_isCloseSignal(text)) {
+      addBubble(text, 'user')
+      addBubble('Okay, glad I could help! 👋', 'agent')
+      awaitingCloseConfirmation = false
+      setTimeout(resetConversation, 1400)
+      return
+    }
+    // real follow-up question — stop watching for a close signal, proceed normally
+    awaitingCloseConfirmation = false
+  }
+
   const cancelWords = ['cancel', 'stop', 'never mind', 'nevermind', 'forget it', 'nope', 'abort']
   if (cancelWords.some(w => text.toLowerCase().includes(w)) && agentMessages.length > 0) {
     resetConversation()
@@ -250,7 +304,10 @@ async function handleTextInput(text) {
       awaitingReply = false
       addBubble(result.text, 'agent')
       setMicState('idle')
-      // Don't auto-reset — user might want to ask a follow-up question
+      // Don't auto-reset — user might want to ask a follow-up. But now we
+      // watch for a thanks/no so the chat has an actual way to close instead
+      // of just sitting open forever with no resolution.
+      awaitingCloseConfirmation = true
 
     } else if (result.type === 'updated') {
       awaitingReply = false
@@ -367,6 +424,7 @@ btnSave.addEventListener('click', async () => {
 function resetConversation() {
   agentMessages = []
   awaitingReply = false
+  awaitingCloseConfirmation = false
   clearBubbles()
   setMicState('idle')
 }
