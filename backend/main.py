@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from rate_limit import limiter
 from database import init_db
 from agent import run_agent
-from auth import router as auth_router, get_user_from_token
+from auth import router as auth_router, get_user_from_token, run_demo_cleanup
 from reminders import router as reminders_router
 from push import router as push_router
 from scheduler import check_reminders
@@ -72,4 +72,8 @@ async def agent(request: Request, data: dict, authorization: str | None = Header
 
 @app.get("/cron/check-reminders")
 def cron_check_reminders():
+    # Demo cleanup piggybacks on this same tick — it's already pinged every
+    # minute by cron-job.org, so no separate cron job is needed for this.
+    # The query itself is cheap (one SELECT, does nothing if nothing's due).
+    run_demo_cleanup()
     return check_reminders()

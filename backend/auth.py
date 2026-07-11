@@ -6,7 +6,7 @@ import bcrypt, uuid
 router = APIRouter()
 
 # How long a demo account is allowed to live before cleanup claims it
-DEMO_USER_TTL_HOURS = 24
+DEMO_USER_TTL_HOURS = 12
 
 
 
@@ -59,9 +59,16 @@ def get_user_from_token(authorization: str | None):
 # ─── Demo cleanup ───────────────────────────────────────────────────────────────
 # Runs automatically every time someone starts a new demo (lazy cleanup —
 # no separate cron job needed). Demo users older than DEMO_USER_TTL_HOURS
-# get removed. If they made a reminder, it's reassigned to the admin account
-# first (kept as a record, tagged is_demo_reminder) before the throwaway
-# demo account is deleted.
+# get removed. If they made a reminder AND an admin account exists, the
+# reminder is reassigned to the admin first (kept as a record, tagged
+# is_demo_reminder). If there's no admin account, the reminder is just
+# deleted along with the demo user — it's throwaway test data either way,
+# and there's nowhere meaningful to reassign it to.
+#
+# NOTE: previously, if no admin account existed, demo users WITH a reminder
+# were skipped entirely (never deleted) — since nearly every demo user
+# creates the one reminder demo mode allows, this meant demo accounts were
+# effectively never cleaned up in practice. Fixed below.
 
 def _cleanup_old_demo_users(db):
     from database import Session as SessionModel
@@ -85,13 +92,28 @@ def _cleanup_old_demo_users(db):
                 for r in reminders:
                     r.user_id = admin.id
             else:
-                continue
+                for r in reminders:
+                    db.delete(r)
 
         db.query(SessionModel).filter(SessionModel.user_id == demo_user.id).delete()
         db.query(PushSubscription).filter(PushSubscription.user_id == demo_user.id).delete()
         db.delete(demo_user)
 
     db.commit()
+
+
+def run_demo_cleanup():
+    """
+    Public entry point for cleanup, used by the cron job (main.py) so demo
+    users get purged automatically on a schedule — not just lazily, only
+    when someone happens to start a NEW demo session. Opens and closes its
+    own DB session since this is called independently of a request.
+    """
+    db = SessionLocal()
+    try:
+        _cleanup_old_demo_users(db)
+    finally:
+        db.close()
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
