@@ -169,4 +169,9 @@ async def run_agent(messages: list, user_id: str) -> dict:
     system = PROMPT_MAP.get(intent, CREATE_PROMPT)
 
     print(f"[agent] intent={intent} user={user_id[:8]}...")
-    return await run_loop(messages, system, user_id, now_str)
+    result = await run_loop(messages, system, user_id, now_str)
+    result["intent"] = intent   # lets the frontend tell "the conversation's real
+                                 # goal just completed" apart from "a side-action
+                                 # (like creating/deleting something else) happened
+                                 # mid-conversation and we should keep going"
+    return result

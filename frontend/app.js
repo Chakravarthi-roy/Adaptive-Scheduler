@@ -279,6 +279,14 @@ async function handleTextInput(text) {
   setMicState('thinking')
   awaitingReply = false
 
+  await _sendToAgent()
+}
+
+// Fires the actual /agent request and hands the response to processAgentResult.
+// Shared by handleTextInput AND continueSideAction below — the "resume the
+// original task after a detour" flow needs the exact same response handling,
+// just without a fresh user bubble/message being typed first.
+async function _sendToAgent() {
   try {
     const res = await fetch(`${API_BASE}/agent`, {
       method: 'POST',
@@ -291,47 +299,79 @@ async function handleTextInput(text) {
     if (result.messages) {
       agentMessages = result.messages.filter(m => m.role !== 'system')
     }
-
-    if (result.type === 'question') {
-      awaitingReply = true
-      addBubble(result.text, 'agent')
-      setMicState('idle')
-    } else if (result.type === 'reminder') {
-      awaitingReply = false
-      setMicState('idle')
-      showConfirmModal(result.data)
-    } else if (result.type === 'answer') {
-      awaitingReply = false
-      addBubble(result.text, 'agent')
-      setMicState('idle')
-      // Don't auto-reset — user might want to ask a follow-up. But now we
-      // watch for a thanks/no so the chat has an actual way to close instead
-      // of just sitting open forever with no resolution.
-      awaitingCloseConfirmation = true
-
-    } else if (result.type === 'updated') {
-      awaitingReply = false
-      addBubble(result.text, 'agent')
-      setMicState('idle')
-      loadReminders()
-      setTimeout(resetConversation, 1800)
-    } else if (result.type === 'deleted') {
-      awaitingReply = false
-      addBubble(result.text, 'agent')
-      setMicState('idle')
-      loadReminders()
-      setTimeout(resetConversation, 1800)
-    } else if (result.type === 'error') {
-      awaitingReply = false
-      addBubble(result.text, 'agent')
-      setMicState('idle')
-    }
+    processAgentResult(result)
   } catch (err) {
     console.error(err)
     awaitingReply = false
     setMicState('idle')
     alert('Something went wrong — check the console.')
   }
+}
+
+// The whole-conversation intent the server classified from the FIRST message
+// (e.g. "move my meeting to 5pm" stays "update" for the whole conversation).
+// Tracked so the modal/update/delete handlers can tell "the thing this
+// conversation was actually about just finished" apart from "a detour
+// happened along the way (e.g. creating a replacement while updating)".
+let lastResultIntent = null
+
+function processAgentResult(result) {
+  lastResultIntent = result.intent || lastResultIntent
+
+  if (result.type === 'question') {
+    awaitingReply = true
+    addBubble(result.text, 'agent')
+    setMicState('idle')
+  } else if (result.type === 'reminder') {
+    awaitingReply = false
+    setMicState('idle')
+    showConfirmModal(result.data)
+  } else if (result.type === 'answer') {
+    awaitingReply = false
+    addBubble(result.text, 'agent')
+    setMicState('idle')
+    // Don't auto-reset — user might want to ask a follow-up. But now we
+    // watch for a thanks/no so the chat has an actual way to close instead
+    // of just sitting open forever with no resolution.
+    awaitingCloseConfirmation = true
+
+  } else if (result.type === 'updated') {
+    awaitingReply = false
+    addBubble(result.text, 'agent')
+    setMicState('idle')
+    loadReminders()
+    // Only reset if updating was what this whole conversation was actually
+    // about. If it was a detour (e.g. deleting something while the real
+    // goal was an update), keep the conversation open and pick back up.
+    if (lastResultIntent === 'update') {
+      setTimeout(resetConversation, 1800)
+    } else {
+      setTimeout(() => continueSideAction(`${result.text}`), 1200)
+    }
+  } else if (result.type === 'deleted') {
+    awaitingReply = false
+    addBubble(result.text, 'agent')
+    setMicState('idle')
+    loadReminders()
+    if (lastResultIntent === 'delete') {
+      setTimeout(resetConversation, 1800)
+    } else {
+      setTimeout(() => continueSideAction(`${result.text}`), 1200)
+    }
+  } else if (result.type === 'error') {
+    awaitingReply = false
+    addBubble(result.text, 'agent')
+    setMicState('idle')
+  }
+}
+
+// After a mid-conversation detour (create/delete spawned while doing
+// something else) completes, nudge the agent to resume the ORIGINAL task
+// instead of just leaving the conversation hanging.
+async function continueSideAction(noteText) {
+  agentMessages.push({ role: 'user', content: `[${noteText} Continue with what we were doing before.]` })
+  setMicState('thinking')
+  await _sendToAgent()
 }
 
 // ─── Confirm Modal ────────────────────────────────────────────────────────────
@@ -360,7 +400,13 @@ function showConfirmModal(extracted) {
 
 function closeModal() {
   overlay.classList.remove('show')
-  resetConversation()
+  // Only reset if creating was the actual point of this conversation. If this
+  // modal was a detour (e.g. offering to create a replacement mid-update) and
+  // the user declines it, the original conversation is still unresolved —
+  // leave it open rather than wiping it out.
+  if (lastResultIntent === 'create') {
+    resetConversation()
+  }
 }
 
 btnCancel.addEventListener('click',  closeModal)
@@ -404,8 +450,16 @@ btnSave.addEventListener('click', async () => {
     const data = await res.json()
     if (data.status === 'saved') {
       overlay.classList.remove('show')
-      resetConversation()
       await loadReminders()
+
+      // Only reset if creating was the actual point of this conversation.
+      // If it was a detour (e.g. creating a replacement mid-update), keep
+      // the conversation open and let the agent resume the original task.
+      if (lastResultIntent === 'create') {
+        resetConversation()
+      } else {
+        setTimeout(() => continueSideAction(`Created "${title}" ✓.`), 800)
+      }
 
       // Tour step 4 — fires after reminder saved and cards are rendered
       if (isDemo() && _tourStep === 3 && !_tourDone) {
@@ -425,6 +479,7 @@ function resetConversation() {
   agentMessages = []
   awaitingReply = false
   awaitingCloseConfirmation = false
+  lastResultIntent = null
   clearBubbles()
   setMicState('idle')
 }
