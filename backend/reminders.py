@@ -42,8 +42,8 @@ def save_reminder(request: Request, data: dict, authorization: str | None = Head
             participants=json.dumps(data.get("participants", [])),
             action_label=data.get("action_label") or None,
             duration_minutes=data.get("duration_minutes") if data.get("duration_minutes") not in (None, "") else None,
-            pre_alert_minutes=data.get("pre_alert_minutes") if data.get("pre_alert_minutes") else None,
-            follow_up_minutes=data.get("follow_up_minutes") if data.get("follow_up_minutes") else None,
+            pre_alert_minutes=data.get("pre_alert_minutes") if data.get("pre_alert_minutes") not in (None, "") else None,
+            follow_up_minutes=data.get("follow_up_minutes") if data.get("follow_up_minutes") not in (None, "") else None,
             done=False
         )
         db.add(reminder)
