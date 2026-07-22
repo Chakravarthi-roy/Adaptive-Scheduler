@@ -299,6 +299,27 @@
   <script>
     const API_BASE = 'https://adaptive-scheduler-x6nw.onrender.com'
 
+    // Mirrors the auth token into IndexedDB — readable from the service
+    // worker (unlike localStorage), so notification action buttons (mark
+    // done, snooze) can make an authenticated request. Same implementation
+    // as app.js's copy, kept identical since they must use the same DB/store.
+    function _saveTokenForServiceWorker(token) {
+      return new Promise((resolve) => {
+        try {
+          const req = indexedDB.open('scheduler-auth', 1)
+          req.onupgradeneeded = () => { req.result.createObjectStore('auth') }
+          req.onsuccess = () => {
+            const db = req.result
+            const tx = db.transaction('auth', 'readwrite')
+            tx.objectStore('auth').put(token, 'token')
+            tx.oncomplete = () => resolve()
+            tx.onerror    = () => resolve()
+          }
+          req.onerror = () => resolve()
+        } catch (e) { resolve() }
+      })
+    }
+
     // If already logged in (real account only), skip straight to app
     // Demo users must be allowed through so they can create a real account
     if (localStorage.getItem('scheduler_token') && localStorage.getItem('scheduler_is_demo') !== 'true') {
@@ -426,6 +447,7 @@
         localStorage.setItem('scheduler_nickname', data.nickname || email.split('@')[0])
         localStorage.setItem('scheduler_email', data.email)
         localStorage.removeItem('scheduler_is_demo')
+        _saveTokenForServiceWorker(data.token)
         window.location.replace('/')
 
       } catch (err) {
@@ -515,6 +537,7 @@
         localStorage.setItem('scheduler_nickname', 'Demo')
         localStorage.setItem('scheduler_email', '')
         localStorage.setItem('scheduler_is_demo', 'true')
+        _saveTokenForServiceWorker(data.token)
         window.location.replace('/')
 
       } catch (err) {

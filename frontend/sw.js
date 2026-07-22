@@ -1,5 +1,51 @@
-const CACHE = 'scheduler-v1'
+const CACHE = 'scheduler-v2'
 const SHELL = ['/', '/index.html', '/app.js', '/style.css', '/icons/icon-192.png', '/icons/icon-512.png']
+
+// Reads the auth token from IndexedDB (mirrored here from app.js/login.html —
+// localStorage isn't accessible from a service worker). Without this, the
+// done/snooze fetches below get sent with NO Authorization header, the
+// backend silently returns 401, and fetch() doesn't treat a 401 as a
+// failure — so the button LOOKS like it worked but nothing ever happened
+// server-side. This was the actual cause of reminders showing "missed"
+// even after clicking the notification's action button.
+function getStoredToken() {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open('scheduler-auth', 1)
+      req.onupgradeneeded = () => { req.result.createObjectStore('auth') }
+      req.onsuccess = () => {
+        const db = req.result
+        try {
+          const tx = db.transaction('auth', 'readonly')
+          const getReq = tx.objectStore('auth').get('token')
+          getReq.onsuccess = () => resolve(getReq.result || null)
+          getReq.onerror   = () => resolve(null)
+        } catch (e) { resolve(null) }
+      }
+      req.onerror = () => resolve(null)
+    } catch (e) { resolve(null) }
+  })
+}
+
+function authedFetch(url, options) {
+  return getStoredToken().then(token => {
+    if (!token) {
+      console.log('[sw] no auth token available in IndexedDB — request will fail')
+    }
+    return fetch(url, {
+      ...options,
+      headers: { ...(options.headers || {}), ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+    }).then(res => {
+      if (!res.ok) {
+        // fetch() does NOT reject on non-2xx status — without this, a 401/404/500
+        // here would silently do nothing while looking like it worked, exactly
+        // like the original bug this function was written to fix.
+        console.log(`[sw] request to ${url} failed with status ${res.status}`)
+      }
+      return res
+    })
+  })
+}
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -105,7 +151,7 @@ self.addEventListener('notificationclick', e => {
   if (action === 'snooze') {
     if (reminder_id) {
       e.waitUntil(
-        fetch(`${API_BASE}/reminders/${reminder_id}/snooze`, { method: 'POST' })
+        authedFetch(`${API_BASE}/reminders/${reminder_id}/snooze`, { method: 'POST' })
           .catch(err => console.log('snooze failed:', err))
       )
     }
@@ -120,7 +166,7 @@ self.addEventListener('notificationclick', e => {
   // Any other action button = mark done (took_it, started, doing, done, etc.)
   if (reminder_id) {
     e.waitUntil(
-      fetch(`${API_BASE}/reminders/${reminder_id}/done`, { method: 'PATCH' })
+      authedFetch(`${API_BASE}/reminders/${reminder_id}/done`, { method: 'PATCH' })
         .catch(err => console.log('mark done failed:', err))
     )
   }

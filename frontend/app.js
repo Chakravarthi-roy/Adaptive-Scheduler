@@ -22,16 +22,48 @@ function getAuthHeaders() {
   }
 }
 
+// ─── Service-worker-accessible token store ───────────────────────────────────
+// localStorage isn't readable from a service worker (different execution
+// context) — but a notification-click handler runs IN the service worker, and
+// needs the token to make an authenticated fetch (marking done, snoozing).
+// IndexedDB is readable from both, so the token gets mirrored here too,
+// kept in sync wherever it's set/cleared in localStorage.
+function _saveTokenForServiceWorker(token) {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open('scheduler-auth', 1)
+      req.onupgradeneeded = () => { req.result.createObjectStore('auth') }
+      req.onsuccess = () => {
+        const db = req.result
+        const tx = db.transaction('auth', 'readwrite')
+        tx.objectStore('auth').put(token, 'token')
+        tx.oncomplete = () => resolve()
+        tx.onerror    = () => resolve()
+      }
+      req.onerror = () => resolve()
+    } catch (e) { resolve() }
+  })
+}
+function _clearTokenForServiceWorker() { return _saveTokenForServiceWorker(null) }
+
+// Sync existing sessions too — people already logged in before this fix
+// shipped would otherwise have a token in localStorage but nothing in
+// IndexedDB until their next login, leaving notification actions broken
+// until then. Harmless to call on every load either way.
+if (getToken()) { _saveTokenForServiceWorker(getToken()) }
+
 function handle401() {
   localStorage.removeItem('scheduler_token')
   localStorage.removeItem('scheduler_nickname')
   localStorage.removeItem('scheduler_email')
   localStorage.removeItem('scheduler_is_demo')
+  _clearTokenForServiceWorker()
   window.location.replace('/login.html')
 }
 
 function logout() {
   localStorage.clear()
+  _clearTokenForServiceWorker()
   window.location.replace('/login.html')
 }
 
