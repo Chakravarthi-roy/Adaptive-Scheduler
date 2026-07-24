@@ -57,5 +57,6 @@ def send_test(authorization: str | None = Header(default=None)):
     return send_notification(
         "Test Notification 🔔",
         "Your Adaptive Scheduler notifications are working!",
+        vibrate=user.vibration_enabled if user.vibration_enabled is not None else True,
         user_id=user.id
     )

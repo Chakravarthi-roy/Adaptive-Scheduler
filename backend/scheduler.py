@@ -1,5 +1,5 @@
 import pytz
-from database import SessionLocal, Reminder
+from database import SessionLocal, Reminder, User
 from datetime import datetime, timedelta
 from notification import send_notification
 
@@ -30,7 +30,7 @@ def get_action_config(reminder):
     return meta["action"], label
 
 # ─── Notification content — generic, works for any type ──────────────────────
-def build_notification(reminder, is_pre_alert=False):
+def build_notification(reminder, is_pre_alert=False, vibration_enabled=True):
     title = reminder.title
     time_str = reminder.datetime.strftime("%I:%M %p")
     location_str = f" · {reminder.location}" if reminder.location else ""
@@ -46,7 +46,7 @@ def build_notification(reminder, is_pre_alert=False):
             "action": action,
             "action_label": action_label,
             "persistent": persistent,
-            "sound": True
+            "sound": vibration_enabled
         }
     else:
         return {
@@ -55,7 +55,7 @@ def build_notification(reminder, is_pre_alert=False):
             "action": action,
             "action_label": action_label,
             "persistent": persistent,
-            "sound": True
+            "sound": vibration_enabled
         }
 
 
@@ -68,6 +68,15 @@ def check_reminders():
 
         pre_alerted_count = 0
         notified_count = 0
+
+        # Cached per this run — several reminders can belong to the same user
+        # in one tick, no need to re-query their preference each time.
+        _vibration_cache = {}
+        def get_vibration_pref(user_id):
+            if user_id not in _vibration_cache:
+                u = db.query(User).filter(User.id == user_id).first()
+                _vibration_cache[user_id] = u.vibration_enabled if (u and u.vibration_enabled is not None) else True
+            return _vibration_cache[user_id]
 
         # ── 1. Check pre-alerts (dynamic per-reminder) ──────────────────────
         # fetch all unnotified, un-pre-alerted reminders with a datetime set
@@ -98,7 +107,7 @@ def check_reminders():
             if not (pre_alert_window_start <= reminder.datetime <= pre_alert_window_end):
                 continue
 
-            notif = build_notification(reminder, is_pre_alert=True)
+            notif = build_notification(reminder, is_pre_alert=True, vibration_enabled=get_vibration_pref(reminder.user_id))
             result = send_notification(
                 notif["title"],
                 notif["body"],
@@ -107,6 +116,7 @@ def check_reminders():
                 action_label=notif["action_label"],
                 reminder_id=reminder.id,
                 is_pre_alert=True,
+                vibrate=notif["sound"],
                 user_id=reminder.user_id
             )
             if result.get("status") == "sent":
@@ -121,7 +131,7 @@ def check_reminders():
         ).all()
 
         for reminder in due:
-            notif = build_notification(reminder, is_pre_alert=False)
+            notif = build_notification(reminder, is_pre_alert=False, vibration_enabled=get_vibration_pref(reminder.user_id))
             result = send_notification(
                 notif["title"],
                 notif["body"],
@@ -129,6 +139,7 @@ def check_reminders():
                 action=notif["action"],
                 action_label=notif["action_label"],
                 reminder_id=reminder.id,
+                vibrate=notif["sound"],
                 user_id=reminder.user_id
             )
 
@@ -172,6 +183,7 @@ def check_reminders():
                     action_label="Done now ✓",
                     reminder_id=reminder.id,
                     is_pre_alert=False,
+                    vibrate=get_vibration_pref(reminder.user_id),
                     user_id=reminder.user_id
                 )
         if missed_count:
@@ -202,7 +214,7 @@ def check_reminders():
                 continue
 
             from notification import build_followup_notification
-            notif = build_followup_notification(reminder)
+            notif = build_followup_notification(reminder, vibration_enabled=get_vibration_pref(reminder.user_id))
             result = send_notification(
                 notif["title"],
                 notif["body"],
@@ -211,6 +223,7 @@ def check_reminders():
                 action_label=notif["action_label"],
                 reminder_id=reminder.id,
                 is_pre_alert=False,
+                vibrate=notif["sound"],
                 user_id=reminder.user_id
             )
             if result.get("status") == "sent":

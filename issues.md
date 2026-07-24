@@ -12,10 +12,6 @@ Tracked separately from `PROGRESS.md` (which logs what was *done*) — this is w
 When a reminder's duration is updated and it now overlaps the next reminder, nothing shifts automatically and there's no offer to shift it — the basic collision mention (`UPDATE_PROMPT`) just flags the overlap in the confirmation text. The full designed system (type-based eligibility, graduated 20/10-min thresholds, ripple cap, bulk-move-with-pinned-exceptions) is written up in `PROGRESS.md` under "Cascade/ripple update system" but not implemented.
 **Priority:** whenever the app is used for a genuinely packed schedule, this becomes the most noticeable gap.
 
-### 🔴 #2 — Vibration setting is UI-only
-The Settings toggle only triggers `navigator.vibrate()` locally when tapped in the settings panel itself — it's never synced to the backend, so real push notifications always use the same fixed `sound`/`vibrate` logic in `notification.py` regardless of what the user set. Toggling it does nothing to actual reminder notifications.
-**Fix needed:** add a `User.vibration_enabled` (or similar) DB column, sync from `app.js`'s `toggleVibration()`, read it in `notification.py`/`send_notification`.
-
 ### 🔴 #3 — Timezone setting not synced to backend
 Settings panel lets the user pick a timezone (IST/EST/PST/etc.), but it's stored in `localStorage` only. `agent.py`/`context.py`'s `get_user_tz()` reads from `User.timezone` in the DB — a column that's either never populated, or populated by nothing the frontend currently writes to. This means the "current time" the agent reasons about and the timezone shown in Settings can silently disagree.
 **Fix needed:** an endpoint to save timezone to the `User` row when changed in Settings, replacing/supplementing the `localStorage`-only approach.
@@ -41,6 +37,10 @@ The split into `js/*.js` modules (see `PROGRESS.md` Session 4) was verified via 
 ---
 
 ## Fixed Issues (for reference)
+
+### 🟢 #2 — Vibration setting was UI-only, and the backend pipeline was disconnected at every link
+**Root cause, three separate gaps stacked together:** (1) no `User` column existed for the preference at all — it only ever lived in `localStorage`; (2) even the type-level `sound` field was hardcoded `True` in every notification builder, no variation at all; (3) even THAT hardcoded value was never actually passed into `send_notification`'s `vibrate` parameter at any of the 4 call sites in `scheduler.py` — so `vibrate` always fell back to its own default (`True`) regardless of anything upstream.
+**Fixed:** added `User.vibration_enabled` column + `PATCH /me/settings` endpoint (`auth.py`) + `GET /me` now returns it. `scheduler.py` gained a per-run cached lookup so multiple reminders for the same user in one tick don't repeat-query; all 4 notification paths (pre-alert, on-time, missed re-fire, follow-up) now actually thread the real value through. `js/settings.js`'s `toggleVibration()` pushes to the backend now, and `populateSettings()` pulls the real value from `/me` on load to correct drift across devices. Test-notification endpoint (`push.py`) fixed too, for consistency. **Requires a migration:** `ALTER TABLE users ADD COLUMN vibration_enabled BOOLEAN DEFAULT TRUE;`
 
 ### 🟢 Notification action buttons silently failed to mark reminders done (was #9, "missing notif looks odd")
 **Root cause:** `sw.js`'s notification-click handler sent `fetch()` requests to `/reminders/{id}/done` and `/reminders/{id}/snooze` with no `Authorization` header — service workers can't read `localStorage`, where the token lives. The backend correctly returned 401, but `fetch()` doesn't reject on HTTP error statuses, only network failures — so the failure was completely silent. Clicking the button looked like it worked; the server never got a valid request; the reminder correctly (from the scheduler's perspective) got marked missed an hour later since `done` genuinely never became `True`.

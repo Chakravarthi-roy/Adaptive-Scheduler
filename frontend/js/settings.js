@@ -1,4 +1,5 @@
-import { getNickname, getEmail, isDemo, logout } from './auth.js'
+import { API_BASE } from './config.js'
+import { getNickname, getEmail, isDemo, logout, getAuthHeaders, handle401 } from './auth.js'
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 const SETTINGS_KEY = 'scheduler_settings'
@@ -46,6 +47,13 @@ export function populateSettings() {
   if (d2) d2.textContent = s.afterAWhile
   const vt = document.getElementById('vibration-toggle')
   if (vt) { s.vibration ? vt.classList.add('on') : vt.classList.remove('on') }
+
+  // The toggle itself only ever reads localStorage above for instant, no-flicker
+  // display — but the backend is the actual source of truth (it's what
+  // scheduler.py checks when deciding whether to vibrate a real notification).
+  // Sync from there now, correcting the UI/localStorage if they've drifted
+  // (e.g. changed on another device).
+  _syncVibrationFromBackend()
 
   // Inject Account section once
   if (!document.getElementById('account-section')) {
@@ -95,6 +103,44 @@ export function toggleVibration() {
   const isOn = t.classList.contains('on')
   if (isOn && navigator.vibrate) navigator.vibrate([80, 40, 80])
   saveSettings()
+  _pushVibrationToBackend(isOn)
+}
+
+// ─── Vibration backend sync ─────────────────────────────────────────────────
+// The toggle used to only ever write to localStorage — meaning the backend
+// (and therefore real push notifications, which scheduler.py builds using
+// the DB value) never actually knew about it. These two functions are what
+// close that loop.
+async function _pushVibrationToBackend(enabled) {
+  try {
+    const res = await fetch(`${API_BASE}/me/settings`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ vibration_enabled: enabled })
+    })
+    if (res.status === 401) { handle401(); return }
+  } catch (err) {
+    console.error('could not save vibration setting:', err)
+  }
+}
+
+async function _syncVibrationFromBackend() {
+  try {
+    const res = await fetch(`${API_BASE}/me`, { headers: getAuthHeaders() })
+    if (res.status === 401) { handle401(); return }
+    const data = await res.json()
+    if (typeof data.vibration_enabled !== 'boolean') return
+
+    const local = loadSettings()
+    if (data.vibration_enabled === local.vibration) return   // already in sync
+
+    const s = { ...local, vibration: data.vibration_enabled }
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
+    const vt = document.getElementById('vibration-toggle')
+    if (vt) { data.vibration_enabled ? vt.classList.add('on') : vt.classList.remove('on') }
+  } catch (err) {
+    console.error('could not sync vibration setting:', err)
+  }
 }
 
 // ─── Clock ────────────────────────────────────────────────────────────────────

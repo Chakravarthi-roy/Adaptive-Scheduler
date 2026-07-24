@@ -182,7 +182,34 @@ def me(authorization: str | None = Header(default=None)):
     user = get_user_from_token(authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Not logged in")
-    return {"nickname": user.nickname, "email": user.email, "is_demo": user.is_demo}
+    return {
+        "nickname": user.nickname,
+        "email": user.email,
+        "is_demo": user.is_demo,
+        "vibration_enabled": user.vibration_enabled if user.vibration_enabled is not None else True
+    }
+
+
+@router.patch("/me/settings")
+def update_settings(data: dict, authorization: str | None = Header(default=None)):
+    """
+    Generic per-user settings update. Currently handles vibration_enabled;
+    structured to accept other synced preferences (e.g. timezone) later
+    without needing a new endpoint each time.
+    """
+    user = get_user_from_token(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not logged in")
+
+    db = SessionLocal()
+    try:
+        db_user = db.query(User).filter(User.id == user.id).first()
+        if "vibration_enabled" in data:
+            db_user.vibration_enabled = bool(data["vibration_enabled"])
+        db.commit()
+        return {"status": "ok"}
+    finally:
+        db.close()
 
 
 @router.post("/demo")

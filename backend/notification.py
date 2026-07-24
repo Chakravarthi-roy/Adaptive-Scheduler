@@ -11,7 +11,7 @@ VAPID_EMAIL = os.getenv("VAPID_EMAIL")
 # scheduler.py — this file only handles delivery (send_notification) and the
 # simple follow-up message.
 
-def build_followup_notification(reminder):
+def build_followup_notification(reminder, vibration_enabled=True):
     """Simple follow-up nudge — did you do it?"""
     return {
         "title": f"Did you do it? 🔔",
@@ -19,7 +19,7 @@ def build_followup_notification(reminder):
         "action": "done",
         "action_label": "Yes, done ✓",
         "persistent": False,
-        "sound": True,
+        "sound": vibration_enabled,
         "is_pre_alert": False
     }
 

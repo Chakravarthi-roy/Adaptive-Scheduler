@@ -23,6 +23,7 @@ class User(Base):
     created_at    = Column(DateTime, nullable=True)
     is_demo       = Column(Boolean, default=False)
     is_admin      = Column(Boolean, default=False)
+    vibration_enabled   = Column(Boolean, default=True)
     reset_token         = Column(String, nullable=True)
     reset_token_expires = Column(DateTime, nullable=True)
 

@@ -178,3 +178,27 @@ See `ISSUES.md` for the full tracked issue list with status/priority.
 - **`sw.js` stays at the project root**, not inside `js/` — a service worker's scope is determined by its own file location; it has to sit at root to control the whole site (and `push.js`'s `register('./sw.js')` call already expects it there).
 - `sw.js`'s offline shell cache list updated to reference all the new module files instead of the old single `app.js`. Cache version bumped `v2` → `v3`.
 - **Caveat noted**: ES modules require being served over `http(s)://` — won't work opening `index.html` directly via `file://` due to CORS restrictions on module scripts. Not an issue on Render, only relevant for local testing without a dev server.
+
+---
+
+## 2026-07-17 — Session 5
+
+### Bug fix — vibration setting was completely disconnected from real notifications (issue #2)
+- Started working through `ISSUES.md` systematically. First pick: vibration.
+- **Root cause, three separate gaps, not one:**
+  1. No `User` DB column existed for the preference at all — lived only in `localStorage`.
+  2. Even the *type-level* `sound` field was hardcoded `True` in every notification builder (`build_notification` both branches, `build_followup_notification`) — no variation of any kind.
+  3. Even that hardcoded value was never actually passed as the `vibrate` argument at any of the 4 `send_notification(...)` call sites in `scheduler.py` — so `vibrate` always silently fell back to its own default (`True`) regardless of anything upstream.
+- **Fixed, full chain:**
+  - `database.py`: added `User.vibration_enabled` column.
+  - `auth.py`: `GET /me` now returns it; new `PATCH /me/settings` endpoint added (built generically — structured so `timezone` can slot into the same endpoint later without a redesign, per issue #3 which is still on hold).
+  - `scheduler.py`: added a per-cron-tick cached lookup (`get_vibration_pref`) to avoid repeat-querying the same user's preference across multiple reminders; `build_notification` no longer hardcodes `sound`; all 4 notification paths (pre-alert, on-time, missed re-fire, follow-up) now thread the real value through to `send_notification`.
+  - `notification.py`: `build_followup_notification` takes the real preference too.
+  - `push.py`: the test-notification endpoint reflects the real setting now too, for consistency (presumably how someone would actually verify the toggle works).
+  - `js/settings.js`: `toggleVibration()` now PATCHes the backend instead of only writing `localStorage`; `populateSettings()` pulls the real value from `/me` on settings load and corrects any drift (e.g. changed on another device).
+- **Requires a migration**: `ALTER TABLE users ADD COLUMN vibration_enabled BOOLEAN DEFAULT TRUE;`
+
+### Deferred by user's own call
+- Timezone sync (#3) — user said "hold this, mark it not important yet."
+- `search_reminders` date ranges (#6) — "we'll see it later."
+- Cascade/ripple system (#1/#7) — user expressed real skepticism about prompt-based approaches getting "too tight or too loose," wants to think about it more before building. Worth remembering this concern specifically when that discussion resumes — may need a more deterministic (less prompt-reliant) design than originally planned.
