@@ -312,6 +312,16 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- Auth guard — deliberately a plain script, not part of the module
+       system below. ES module imports are hoisted and fully evaluated
+       before any importing file's own top-level code runs, so a guard
+       living inside main.js would actually run AFTER every other module's
+       setup code, not before. This runs first, synchronously, guaranteed. -->
+  <script>
+    if (!localStorage.getItem('scheduler_token')) {
+      window.location.replace('/login.html')
+    }
+  </script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

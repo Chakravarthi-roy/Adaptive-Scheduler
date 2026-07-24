@@ -1,5 +1,10 @@
-const CACHE = 'scheduler-v2'
-const SHELL = ['/', '/index.html', '/app.js', '/style.css', '/icons/icon-192.png', '/icons/icon-512.png']
+const CACHE = 'scheduler-v3'
+const SHELL = [
+  '/', '/index.html', '/style.css', '/icons/icon-192.png', '/icons/icon-512.png',
+  '/js/main.js', '/js/config.js', '/js/dom.js', '/js/auth.js', '/js/push.js',
+  '/js/settings.js', '/js/chat.js', '/js/modal.js', '/js/reminders.js',
+  '/js/views.js', '/js/tour.js'
+]
 
 // Reads the auth token from IndexedDB (mirrored here from app.js/login.html —
 // localStorage isn't accessible from a service worker). Without this, the
