@@ -71,6 +71,22 @@ function updateChatPanelVisibility() {
   const hasContent = chatBubbles.children.length > 0
   chatBubbles.classList.toggle('active', hasContent)
   chatCloseBtn.style.display = hasContent ? 'flex' : 'none'
+  _repositionCloseButton()
+}
+
+// The close button used to sit at a hardcoded position that assumed the
+// panel was already at its max height — so with just 1-2 bubbles it looked
+// stranded way above the actual content. This reads the panel's REAL current
+// top edge (which changes as bubbles are added, up to max-height, and again
+// whenever the type box opens/closes and shifts the panel) and places the
+// button right above it, every time. No transition mismatch: bottom-based
+// CSS changes (bubble growth) are instant, so an immediate read is correct;
+// the type-open shift below calls this again after its own transition ends.
+function _repositionCloseButton() {
+  if (chatBubbles.children.length === 0) return
+  const rect = chatBubbles.getBoundingClientRect()
+  const gap  = 10
+  chatCloseBtn.style.bottom = (window.innerHeight - rect.top + gap) + 'px'
 }
 
 chatCloseBtn.addEventListener('click', () => resetConversation())
@@ -108,9 +124,19 @@ function stopRecording() {
 }
 
 // ─── Type Button ──────────────────────────────────────────────────────────────
+// Opening the type box used to just overlay it directly on top of the chat
+// panel (both had the same fixed position) — hiding whatever reply you were
+// trying to read. Now the panel shifts itself up out of the way in sync.
+function _setTypeAreaOpen(open) {
+  typeArea.classList.toggle('show', open)
+  chatBubbles.classList.toggle('type-open', open)
+  if (open) typeInput.focus()
+  _repositionCloseButton()                    // instant part of the shift
+  setTimeout(_repositionCloseButton, 210)      // settle after the 0.2s transition
+}
+
 typeBtn.addEventListener('click', () => {
-  typeArea.classList.toggle('show')
-  if (typeArea.classList.contains('show')) typeInput.focus()
+  _setTypeAreaOpen(!typeArea.classList.contains('show'))
 })
 
 typeSend.addEventListener('click', () => sendTypedReply())
@@ -120,7 +146,7 @@ function sendTypedReply() {
   const text = typeInput.value.trim()
   if (!text) return
   typeInput.value = ''
-  typeArea.classList.remove('show')
+  _setTypeAreaOpen(false)
   handleTextInput(text)
 }
 
@@ -302,6 +328,8 @@ export function resetConversation() {
   awaitingReply = false
   awaitingCloseConfirmation = false
   lastResultIntent = null
+  typeArea.classList.remove('show')
+  chatBubbles.classList.remove('type-open')
   clearBubbles()
   setMicState('idle')
 }
