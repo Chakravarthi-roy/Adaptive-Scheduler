@@ -1,0 +1,58 @@
+/* ── responsive.css — desktop/mobile breakpoints for nav + modal. Must load LAST so its media-query overrides win the cascade against the base rules in nav.css/modal.css. index.html only. ── */
+
+/* ── Desktop nav — show labels, stack icon+label ─────────────────────── */
+@media (min-width: 641px) {
+  .nav-label { display: block; }
+
+  /* make non-record buttons taller and column-stacked for icon+label */
+  .nav-btn:not(.nav-record) {
+    flex-direction: column;
+    gap: 4px;
+    width: 70px;
+    height: 52px;
+    border-radius: 14px;
+  }
+  /* pip dot hides when labels are visible — label is enough */
+  .nav-btn.active:not(.nav-record)::after { display: none; }
+
+  /* nav itself needs a touch more height on desktop to fit icon+label */
+  .bottom-nav { height: 60px; padding: 0 20px; }
+
+  /* mic button lifts above nav on desktop only */
+  .nav-record { margin-bottom: calc(60px * 0.6); }
+}
+
+/* ── Desktop modal ────────────────────────────────────────────────────── */
+@media (min-width: 641px) {
+  .overlay { align-items: center; }
+  .modal {
+    border-radius: 24px;
+    max-width: 420px;
+    padding: 28px 28px 32px;
+  }
+  .modal-handle { display: none; }
+  @keyframes slideUp {
+    from { transform: scale(0.92); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+}
+
+/* ── Mobile tweaks ────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* mic button sits inline — no lift */
+  .nav-record {
+    margin-bottom: 0 !important;
+    width: 52px;
+    height: 52px;
+  }
+  /* shrink SVGs to fit */
+  .record-icon svg { width: 22px; height: 22px; }
+  .nav-icon svg    { width: 20px; height: 20px; }
+}
+@media (max-width: 400px) {
+  .nav-btn         { width: 40px; height: 40px; }
+  .nav-record      { width: 46px; height: 46px; }
+  :root            { --rec-size: 46px; }
+  .record-icon svg { width: 20px; height: 20px; }
+  .nav-icon svg    { width: 18px; height: 18px; }
+}

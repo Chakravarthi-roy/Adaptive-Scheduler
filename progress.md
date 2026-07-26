@@ -114,6 +114,7 @@ Extensive design discussion for: when updating a reminder's duration causes it t
 - [ ] Run `ALTER TABLE reminders ADD COLUMN duration_minutes VARCHAR;` on Supabase (if not already done)
 - [ ] Delete old `agent.py` from the actual repo before adding the new `agent/` folder
 - [ ] **Delete old `app.js` from the actual repo before adding the new `js/` folder** — replace, don't just add alongside
+- [ ] **Delete old `style.css` from the actual repo before adding the new `css/` folder** — replace, don't just add alongside
 - [ ] Set up a dedicated Gmail account + App Password for password-reset emails, add `GMAIL_USER`/`GMAIL_APP_PASSWORD` to Render env vars
 - [ ] Test the `js/` module refactor for real in a browser once deployed — it was verified via static analysis (syntax + import/export cross-checks) since this environment can't run a browser, so an actual click-through pass is worth doing before trusting it fully
 
@@ -202,3 +203,28 @@ See `ISSUES.md` for the full tracked issue list with status/priority.
 - Timezone sync (#3) — user said "hold this, mark it not important yet."
 - `search_reminders` date ranges (#6) — "we'll see it later."
 - Cascade/ripple system (#1/#7) — user expressed real skepticism about prompt-based approaches getting "too tight or too loose," wants to think about it more before building. Worth remembering this concern specifically when that discussion resumes — may need a more deterministic (less prompt-reliant) design than originally planned.
+
+---
+
+## 2026-07-17 — Session 6
+
+### Small fixes — close chat button + type box overlap
+- Close chat button: was a pill-shaped button with a text label ("close chat"), hindering the view of reminders behind it. Simplified to a small circular icon-only button (30px, just the ✕).
+- Type box was overlapping/hiding the most recent chat messages when opened. **Root cause**: `.chat-bubbles` and `.type-area` had the exact same `bottom` CSS value — the type box (higher z-index) was sitting directly on top of the chat panel. Fixed by making the chat panel shift itself up (`.chat-bubbles.type-open`) whenever the type box opens, with a smooth transition — closes the gap the user asked for as a side effect of the fix, not a separate change.
+- Close chat button also had a hardcoded static position that assumed the panel was always at max height, so it looked disconnected when the chat was still small. Fixed with `_repositionCloseButton()` in `chat.js`, which reads the panel's actual current top edge and positions the button relative to it — recalculated on every bubble add and on type-box toggle, so it genuinely tracks the panel's real size instead of guessing.
+
+### Frontend refactor — split `style.css` into a `css/` package
+- Same pattern as the `agent/` and `js/` splits, applied to CSS. Old monolithic `style.css` (899 lines) split into 9 files under `css/`, by domain:
+  - `base.css` — reset, CSS variables (`:root`), `.app` shell — loaded by ALL 3 HTML pages
+  - `layout.css` — top bar, page band, content area — loaded by ALL 3 pages
+  - `form-fields.css` — shared input/select styling (`.field`, `.field-row`) — loaded by ALL 3 pages
+  - `cards.css` — reminder cards, tags, empty state, skeleton loader — index.html only
+  - `chat.css` — chat bubbles, close button, type box — index.html only
+  - `nav.css` — bottom nav, record button, mic toast — index.html only
+  - `settings.css` — settings panel — index.html only
+  - `modal.css` — confirm-reminder modal chrome — index.html only
+  - `responsive.css` — desktop/mobile breakpoints — index.html only, **must load LAST** (media-query overrides need to win the cascade against base rules in `nav.css`/`modal.css` via source order)
+- No build tool needed — plain multiple `<link rel="stylesheet">` tags per page (CSS has no native per-file import worth using here — `@import` exists but blocks parallel downloading, so separate `<link>` tags in HTML are the better choice).
+- **Real bonus found while splitting, not just organization**: `login.html` and `reset-password.html` were loading the *entire* 899-line stylesheet just to use `.app`/`.top-bar`/`.field` — a handful of shell/form classes. They now only load `base.css` + `layout.css` + `form-fields.css` (201 lines total) instead of the full file, skipping all the chat/nav/settings/modal CSS they never touched.
+- Verified byte-for-byte: reconstructed all 9 files back into original order and diffed against the source `style.css` — identical except one cosmetic blank connector line between two sections (zero actual CSS rules lost or duplicated). Also verified brace-balance on every individual file.
+- `index.html`, `login.html`, `reset-password.html` updated to link the new files; old `style.css` deleted from the repo.

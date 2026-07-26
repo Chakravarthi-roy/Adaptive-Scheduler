@@ -1,0 +1,103 @@
+/* ── layout.css — top bar, page band, content area. Loaded by every page. ── */
+
+/* ── Top Bar ──────────────────────────────────────────────────────────── */
+.top-bar {
+  height: 62px;
+  background: var(--brown);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  /* width is constrained by .app flex container */
+}
+.top-bar-inner {
+  height: 100%;
+  padding: 0 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.app-wordmark {
+  font-family: 'Playfair Display', serif;
+  font-size: 23px;
+  font-weight: 700;
+  color: var(--cream);
+  letter-spacing: 0.01em;
+}
+.top-datetime {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.top-date {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: rgba(254,250,224,0.82);
+  letter-spacing: 0.04em;
+}
+.top-time-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: flex-end;
+}
+.tz-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: rgba(254,250,224,0.5);
+  background: rgba(254,250,224,0.1);
+  border: 1px solid rgba(254,250,224,0.15);
+  border-radius: 4px;
+  padding: 1px 5px;
+  text-transform: uppercase;
+}
+.top-time {
+  font-family: 'DM Mono', monospace;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--cream);
+  letter-spacing: 0.06em;
+}
+
+/* ── Page Band ────────────────────────────────────────────────────────── */
+.page-band {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 22px;
+  background: var(--band-bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.page-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 21px;
+  font-weight: 400;
+  font-style: italic;
+  color: var(--brown);
+  line-height: 1;
+}
+/* count badge — only show when non-empty (JS sets textContent) */
+.reminder-count {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  background: var(--brown);
+  color: var(--cream);
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.04em;
+  display: none;   /* hidden when empty; JS reveals by setting text */
+}
+.reminder-count:not(:empty) { display: inline-block; }
+
+/* ── Content area ─────────────────────────────────────────────────────── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 16px;
+  padding-bottom: calc(var(--nav-h) + var(--nav-gap) + 30px);
+}

@@ -1,0 +1,66 @@
+/* ── base.css — reset, CSS variables, page shell. Loaded by every page. ── */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --brown:   #dda15e;
+  --cream:   #fefae0;
+  --sage:    #ccd5ae;
+  --mint:    #e9edc9;
+
+  /* derived roles */
+  --nav-bg:  var(--brown);
+  --bg:      var(--cream);
+  --band-bg: var(--mint);
+  --surface: #ffffff;
+  --text:    #4a3520;
+  --muted:   #8a7260;
+  --border:  rgba(221,161,94,0.22);
+
+  --app-w:   640px;
+  --nav-h:   70px;
+  --nav-gap: 20px;
+  --rec-size: 72px;   /* bigger mic button */
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+html {
+  overflow-x: hidden;
+}
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── App shell ────────────────────────────────────────────────────────── */
+.app {
+  width: 100%;
+  max-width: var(--app-w);
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+}
+
+/* side border lines — full height, stop just above the floating nav */
+.app::before, .app::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  bottom: calc(var(--nav-h) + var(--nav-gap) + 25px);
+  width: 1px;
+  background: rgba(221,161,94,0.28);
+  z-index: 3;
+  pointer-events: none;
+}
+.app::before { left:  max(0px, calc(50dvw - var(--app-w)/2)); }
+.app::after  { right: max(0px, calc(50dvw - var(--app-w)/2)); }
+@media (max-width: 640px) {
+  .app::before, .app::after { display: none; }
+}

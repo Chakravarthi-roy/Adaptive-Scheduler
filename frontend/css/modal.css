@@ -1,0 +1,103 @@
+/* ── modal.css — confirm-reminder modal chrome (overlay, header, save/cancel). Depends on form-fields.css for .field styling. index.html only. ── */
+
+/* ── Modal ────────────────────────────────────────────────────────────── */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(74,53,32,0.4);
+  backdrop-filter: blur(6px);
+  z-index: 20;
+  align-items: flex-end;
+  justify-content: center;
+}
+.overlay.show { display: flex; }
+
+.modal {
+  background: var(--cream);
+  border-radius: 26px 26px 0 0;
+  padding: 0 22px 36px;
+  width: 100%;
+  max-width: var(--app-w);
+  animation: slideUp 0.3s cubic-bezier(0.32,1.15,0.58,1) both;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+@keyframes slideUp {
+  from { transform: translateY(60px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.modal-handle {
+  width: 40px; height: 4px;
+  border-radius: 2px;
+  background: rgba(221,161,94,0.35);
+  margin: 14px auto 20px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-style: italic;
+  color: var(--brown);
+}
+.modal-close {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--mint);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: background 0.15s, color 0.15s;
+}
+.modal-close:hover { background: var(--sage); color: var(--text); }
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+.btn-save {
+  flex: 1;
+  padding: 13px 18px;
+  border-radius: 13px;
+  background: var(--brown);
+  color: var(--cream);
+  border: none;
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn-save:hover    { background: #c48a4a; }
+.btn-save:active   { transform: scale(0.98); }
+.btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-cancel {
+  padding: 13px 18px;
+  border-radius: 13px;
+  background: var(--mint);
+  color: var(--muted);
+  border: 1.5px solid var(--border);
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-cancel:hover { background: var(--sage); color: var(--text); }

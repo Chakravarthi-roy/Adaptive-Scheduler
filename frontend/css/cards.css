@@ -1,0 +1,133 @@
+/* ── cards.css — reminder cards, tags, empty state, skeleton loader. index.html only. ── */
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 80px 20px;
+  text-align: center;
+}
+.empty-icon {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: var(--mint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brown);
+  margin-bottom: 4px;
+}
+.empty-state p {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  font-style: italic;
+  color: var(--brown);
+}
+.empty-state span { font-size: 13px; color: var(--muted); }
+
+/* ── Cards ────────────────────────────────────────────────────────────── */
+.reminders-area { display: flex; flex-direction: column; gap: 10px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  border-radius: 14px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: transform 0.15s, box-shadow 0.15s;
+  animation: cardIn 0.28s ease both;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 22px rgba(221,161,94,0.13);
+}
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card[data-type="important"] { border-left-color: #b5835a; }
+.card[data-type="health"]    { border-left-color: var(--sage); }
+.card[data-type="routine"]   { border-left-color: var(--brown); }
+.card[data-type="personal"]  { border-left-color: #6b4f8a; }
+.card[data-type="casual"]    { border-left-color: var(--mint); }
+
+.cdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; align-self: flex-start; margin-top: 5px; }
+.cbody { flex: 1; min-width: 0; }
+.ctitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.csub {
+  font-family: 'DM Mono', monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.card-actions { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
+
+.tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tag-important  { background: rgba(181,131,90,0.18); color: #7a4e20; }
+.tag-health     { background: rgba(204,213,174,0.4);  color: #5a6a3a; }
+.tag-routine    { background: rgba(221,161,94,0.18);  color: #9a6230; }
+.tag-personal   { background: rgba(107,79,138,0.15);  color: #6b4f8a; }
+.tag-casual     { background: var(--mint); color: var(--muted); }
+.tag-rec        { background: var(--cream); color: var(--muted); border: 1px solid var(--border); }
+
+.done-btn {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.done-btn:hover { background: rgba(204,213,174,0.4); border-color: var(--sage); color: #5a6a3a; }
+.done-btn svg   { pointer-events: none; }
+.card.is-done { opacity: 0.45; }
+.card.is-done .ctitle { text-decoration: line-through; }
+
+/* ── Skeleton loader ──────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.sk {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(212,163,115,0.12) 25%,
+    rgba(212,163,115,0.26) 50%,
+    rgba(212,163,115,0.12) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite ease-in-out;
+}
+.skeleton-card { pointer-events: none; }
+.sk-dot   { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; align-self: flex-start; margin-top: 5px; }
+.sk-body  { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+.sk-title { height: 13px; width: 55%; }
+.sk-sub   { height: 10px; width: 38%; }
+.sk-tag   { height: 18px; width: 46px; border-radius: 20px; flex-shrink: 0; }
