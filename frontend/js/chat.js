@@ -38,7 +38,6 @@ export function showToast(msg) {
 // ─── Mic State ────────────────────────────────────────────────────────────────
 export function setMicState(state) {
   micBtn.classList.remove('recording', 'processing')
-  typeBtn.style.display = awaitingReply ? 'flex' : 'none'
   switch (state) {
     case 'recording':  micBtn.classList.add('recording');  break
     case 'processing':
@@ -64,29 +63,37 @@ export function clearBubbles() {
   updateChatPanelVisibility()
 }
 
-// Opaque backdrop + close button both track "is there an actual conversation
-// on screen right now" — same condition, one helper, called after every
-// bubble add/clear so they can never drift out of sync with each other.
+// Opaque backdrop + close button + type button all track "is there an actual
+// conversation on screen right now" — same condition, one helper, called
+// after every bubble add/clear so they can never drift out of sync.
+// (typeBtn used to only show when awaitingReply was true — right after the
+// agent asked a clarifying question — which meant it vanished the rest of
+// the time, including during any normal ongoing conversation. Now it's
+// available any time there's something to reply to, not just that one
+// specific moment.)
 function updateChatPanelVisibility() {
   const hasContent = chatBubbles.children.length > 0
   chatBubbles.classList.toggle('active', hasContent)
   chatCloseBtn.style.display = hasContent ? 'flex' : 'none'
-  _repositionCloseButton()
+  typeBtn.style.display      = hasContent ? 'flex' : 'none'
+  _repositionFloatingButtons()
 }
 
-// The close button used to sit at a hardcoded position that assumed the
-// panel was already at its max height — so with just 1-2 bubbles it looked
+// The close/type buttons used to sit at hardcoded positions that assumed the
+// panel was already at its max height — so with just 1-2 bubbles they looked
 // stranded way above the actual content. This reads the panel's REAL current
 // top edge (which changes as bubbles are added, up to max-height, and again
-// whenever the type box opens/closes and shifts the panel) and places the
-// button right above it, every time. No transition mismatch: bottom-based
+// whenever the type box opens/closes and shifts the panel) and places both
+// buttons right above it, every time. No transition mismatch: bottom-based
 // CSS changes (bubble growth) are instant, so an immediate read is correct;
 // the type-open shift below calls this again after its own transition ends.
-function _repositionCloseButton() {
+function _repositionFloatingButtons() {
   if (chatBubbles.children.length === 0) return
   const rect = chatBubbles.getBoundingClientRect()
   const gap  = 10
-  chatCloseBtn.style.bottom = (window.innerHeight - rect.top + gap) + 'px'
+  const bottom = (window.innerHeight - rect.top + gap) + 'px'
+  chatCloseBtn.style.bottom = bottom
+  typeBtn.style.bottom      = bottom
 }
 
 chatCloseBtn.addEventListener('click', () => resetConversation())
@@ -129,10 +136,11 @@ function stopRecording() {
 // trying to read. Now the panel shifts itself up out of the way in sync.
 function _setTypeAreaOpen(open) {
   typeArea.classList.toggle('show', open)
+  typeBtn.classList.toggle('open', open)
   chatBubbles.classList.toggle('type-open', open)
   if (open) typeInput.focus()
-  _repositionCloseButton()                    // instant part of the shift
-  setTimeout(_repositionCloseButton, 210)      // settle after the 0.2s transition
+  _repositionFloatingButtons()                    // instant part of the shift
+  setTimeout(_repositionFloatingButtons, 210)      // settle after the 0.2s transition
 }
 
 typeBtn.addEventListener('click', () => {
@@ -329,6 +337,7 @@ export function resetConversation() {
   awaitingCloseConfirmation = false
   lastResultIntent = null
   typeArea.classList.remove('show')
+  typeBtn.classList.remove('open')
   chatBubbles.classList.remove('type-open')
   clearBubbles()
   setMicState('idle')

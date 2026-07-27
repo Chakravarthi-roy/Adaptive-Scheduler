@@ -228,3 +228,17 @@ See `ISSUES.md` for the full tracked issue list with status/priority.
 - **Real bonus found while splitting, not just organization**: `login.html` and `reset-password.html` were loading the *entire* 899-line stylesheet just to use `.app`/`.top-bar`/`.field` — a handful of shell/form classes. They now only load `base.css` + `layout.css` + `form-fields.css` (201 lines total) instead of the full file, skipping all the chat/nav/settings/modal CSS they never touched.
 - Verified byte-for-byte: reconstructed all 9 files back into original order and diffed against the source `style.css` — identical except one cosmetic blank connector line between two sections (zero actual CSS rules lost or duplicated). Also verified brace-balance on every individual file.
 - `index.html`, `login.html`, `reset-password.html` updated to link the new files; old `style.css` deleted from the repo.
+
+---
+
+## 2026-07-17 — Session 7
+
+### Bug fix — type reply button had completely vanished
+- User reported the type box was gone entirely after the last round of chat-panel changes.
+- **Root cause**: the type button's visibility was gated on `awaitingReply`, which is only `true` in the narrow window right after the agent asks a clarifying question. Outside that specific moment — including during any normal ongoing conversation — it was hidden. Not a regression from the CSS split (verified `.type-toggle` CSS itself was intact and correctly preserved) — a pre-existing visibility-logic issue that became more noticeable once other things got fixed.
+- **Redesigned per user's request**, not just patched:
+  - Type button now shows/hides on the same condition as the close button (active conversation exists), not the narrower `awaitingReply` check — available any time, not just right after one specific question type.
+  - Repositioned to sit beside the close button — same small circular icon shape (30px), both tracking the chat panel's real top edge together via a renamed `_repositionFloatingButtons()` (was `_repositionCloseButton()`, now positions both).
+  - Added a `.type-toggle.open` visual state so it's obvious when the box is active.
+  - Click-to-open / click-again-to-close and Enter-to-send were already implemented correctly — just unreachable before since the button couldn't be seen in the states that mattered. Should work immediately once visible.
+- Verified: JS syntax check, CSS brace balance, and a full DOM-id cross-check between `index.html` and `dom.js` all pass.
