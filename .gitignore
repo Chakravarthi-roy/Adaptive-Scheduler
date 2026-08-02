@@ -14,3 +14,5 @@ backend/env/
 *.pyc
 __pycache__/
 .vscode/
+
+prompt.txt

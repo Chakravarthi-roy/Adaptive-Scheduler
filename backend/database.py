@@ -27,6 +27,18 @@ class User(Base):
     reset_token         = Column(String, nullable=True)
     reset_token_expires = Column(DateTime, nullable=True)
 
+    # Synced settings (previously localStorage-only — see ISSUES.md #3).
+    # Times stored as "HH:MM" strings, same convention as the <input type="time">
+    # fields on the frontend; minutes stored as strings for consistency with
+    # duration_minutes/pre_alert_minutes/etc. on Reminder. All nullable —
+    # NULL means "never synced yet, frontend default applies".
+    timezone             = Column(String, nullable=True)
+    morning_time         = Column(String, nullable=True)
+    evening_time         = Column(String, nullable=True)
+    night_time           = Column(String, nullable=True)
+    in_a_bit_minutes     = Column(String, nullable=True)
+    after_a_while_minutes = Column(String, nullable=True)
+
 
 class Session(Base):
     __tablename__ = "sessions"

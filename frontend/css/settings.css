@@ -120,3 +120,59 @@
   box-shadow: 0 1px 4px rgba(0,0,0,0.15);
 }
 .toggle.on .toggle-knob { left: 21px; }
+
+/* ── Unsaved-changes bar — Time Words / Vague Durations / Timezone ──────── */
+.settings-savebar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-h) + var(--nav-gap) + 14px);
+  transform: translateX(-50%) translateY(12px);
+  width: min(calc(100dvw - 32px), calc(var(--app-w) - 32px));
+  background: var(--surface);
+  border: 1.5px solid var(--brown);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 8px 28px rgba(74,53,32,0.18);
+  z-index: 15;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.settings-savebar.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+.settings-savebar-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12.5px;
+  color: var(--muted);
+  flex: 1;
+}
+.settings-savebar-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.settings-savebar-cancel,
+.settings-savebar-save {
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+.settings-savebar-cancel {
+  background: var(--mint);
+  color: var(--muted);
+  border: 1.5px solid var(--border);
+}
+.settings-savebar-cancel:hover { background: var(--sage); color: var(--text); }
+.settings-savebar-save {
+  background: var(--brown);
+  color: var(--cream);
+}
+.settings-savebar-save:hover { background: #c48a4a; }

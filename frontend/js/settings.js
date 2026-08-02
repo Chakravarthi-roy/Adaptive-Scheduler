@@ -19,17 +19,102 @@ export function loadSettings() {
   catch { return { ...DEFAULTS } }
 }
 
+function _writeLocal(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
+}
+
+// Immediate, no-dirty-tracking save — used only by vibration. Its own toggle
+// already pushes to the backend the instant it's tapped (see toggleVibration
+// below); a Save/Cancel step doesn't make sense for a single on/off switch.
 export function saveSettings() {
   const s = {
-    morning:     document.getElementById('s-morning')?.value      || DEFAULTS.morning,
-    evening:     document.getElementById('s-evening')?.value      || DEFAULTS.evening,
-    night:       document.getElementById('s-night')?.value        || DEFAULTS.night,
+    ...loadSettings(),
+    vibration: document.getElementById('vibration-toggle')?.classList.contains('on') ?? DEFAULTS.vibration
+  }
+  _writeLocal(s)
+}
+
+// ─── Dirty-state tracking — Time Words, Vague Durations, Timezone ─────────
+// These three groups used to auto-save on every change (`onchange="saveSettings()"`
+// / stepValue calling saveSettings() directly). Now a change only stages a
+// pending value; nothing commits (to localStorage OR the backend) until Save
+// is tapped, and Cancel reverts every field back to the last committed
+// snapshot. Vibration is deliberately excluded from this group — see above.
+let _snapshot = null   // last-committed values for the tracked fields, or null before first populate
+
+function _trackedFields() {
+  return {
+    morning:     document.getElementById('s-morning')?.value ?? DEFAULTS.morning,
+    evening:     document.getElementById('s-evening')?.value ?? DEFAULTS.evening,
+    night:       document.getElementById('s-night')?.value ?? DEFAULTS.night,
     inABit:      parseInt(document.getElementById('s-in-a-bit')?.value)      || DEFAULTS.inABit,
     afterAWhile: parseInt(document.getElementById('s-after-a-while')?.value) || DEFAULTS.afterAWhile,
-    vibration:   document.getElementById('vibration-toggle')?.classList.contains('on') ?? DEFAULTS.vibration,
-    timezone:    document.getElementById('s-timezone')?.value || DEFAULTS.timezone
+    timezone:    document.getElementById('s-timezone')?.value ?? DEFAULTS.timezone
   }
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
+}
+
+function _isDirty() {
+  if (!_snapshot) return false
+  const current = _trackedFields()
+  return Object.keys(current).some(k => String(current[k]) !== String(_snapshot[k]))
+}
+
+function _showSaveBar(show) {
+  const bar = document.getElementById('settings-savebar')
+  if (bar) bar.classList.toggle('show', show)
+}
+
+// Called on every change to a tracked field — time inputs, the timezone
+// select, and the duration steppers (via stepValue below). Only re-evaluates
+// dirty state and shows/hides the bar; never persists anything by itself.
+export function onSettingsFieldChange() {
+  _showSaveBar(_isDirty())
+}
+
+// Save button — commits the staged values to localStorage AND the backend.
+// The committed values become the new snapshot Cancel would revert to.
+export async function commitSettings() {
+  const current = _trackedFields()
+  const s = { ...loadSettings(), ...current }
+  _writeLocal(s)
+  _snapshot = current
+  _showSaveBar(false)
+
+  try {
+    const res = await fetch(`${API_BASE}/me/settings`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        timezone:      current.timezone,
+        morning:       current.morning,
+        evening:       current.evening,
+        night:         current.night,
+        in_a_bit:      current.inABit,
+        after_a_while: current.afterAWhile
+      })
+    })
+    if (res.status === 401) { handle401(); return }
+  } catch (err) {
+    console.error('could not save settings to backend:', err)
+  }
+}
+
+// Cancel button — reverts the visible inputs back to the last committed
+// snapshot, discarding whatever's currently staged (and un-persisted).
+export function cancelSettingsChanges() {
+  if (!_snapshot) return
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val }
+  set('s-morning',       _snapshot.morning)
+  set('s-evening',       _snapshot.evening)
+  set('s-night',         _snapshot.night)
+  set('s-in-a-bit',      _snapshot.inABit)
+  set('s-after-a-while', _snapshot.afterAWhile)
+  set('s-timezone',      _snapshot.timezone)
+  const d1 = document.getElementById('s-in-a-bit-display')
+  const d2 = document.getElementById('s-after-a-while-display')
+  if (d1) d1.textContent = _snapshot.inABit
+  if (d2) d2.textContent = _snapshot.afterAWhile
+  _showSaveBar(false)
 }
 
 export function populateSettings() {
@@ -48,12 +133,20 @@ export function populateSettings() {
   const vt = document.getElementById('vibration-toggle')
   if (vt) { s.vibration ? vt.classList.add('on') : vt.classList.remove('on') }
 
-  // The toggle itself only ever reads localStorage above for instant, no-flicker
+  // Snapshot BEFORE the backend sync below — if the sync corrects a stale
+  // local value, it updates the snapshot itself (see _syncSettingsFromBackend),
+  // so a drift-correction never gets mistaken for a pending user edit and
+  // pops the Save/Cancel bar open on load.
+  _snapshot = _trackedFields()
+  _showSaveBar(false)
+
+  // The panel only ever reads localStorage above for instant, no-flicker
   // display — but the backend is the actual source of truth (it's what
-  // scheduler.py checks when deciding whether to vibrate a real notification).
-  // Sync from there now, correcting the UI/localStorage if they've drifted
-  // (e.g. changed on another device).
-  _syncVibrationFromBackend()
+  // context.py's get_user_tz() and scheduler.py check when reasoning about
+  // "current time" and notification timing). Sync from there now, correcting
+  // the UI/localStorage/snapshot if they've drifted (e.g. changed on another
+  // device, or never synced before this feature existed).
+  _syncSettingsFromBackend()
 
   // Inject Account section once
   if (!document.getElementById('account-section')) {
@@ -93,7 +186,7 @@ export function stepValue(id, delta) {
   val = Math.max(min, Math.min(max, val))
   input.value         = val
   display.textContent = val
-  saveSettings()
+  onSettingsFieldChange()
   if (loadSettings().vibration && navigator.vibrate) navigator.vibrate(30)
 }
 
@@ -109,8 +202,7 @@ export function toggleVibration() {
 // ─── Vibration backend sync ─────────────────────────────────────────────────
 // The toggle used to only ever write to localStorage — meaning the backend
 // (and therefore real push notifications, which scheduler.py builds using
-// the DB value) never actually knew about it. These two functions are what
-// close that loop.
+// the DB value) never actually knew about it. This is what closes that loop.
 async function _pushVibrationToBackend(enabled) {
   try {
     const res = await fetch(`${API_BASE}/me/settings`, {
@@ -124,22 +216,55 @@ async function _pushVibrationToBackend(enabled) {
   }
 }
 
-async function _syncVibrationFromBackend() {
+// ─── Full settings backend sync ─────────────────────────────────────────────
+// Pulls vibration + timezone + time-words + vague-durations from the User
+// row and corrects localStorage/the DOM/the dirty-tracking snapshot if
+// they've drifted from what's actually saved server-side (or never synced
+// before this feature existed, in which case the server returns its own
+// defaults and this just confirms local matches — a no-op in that case).
+async function _syncSettingsFromBackend() {
   try {
     const res = await fetch(`${API_BASE}/me`, { headers: getAuthHeaders() })
     if (res.status === 401) { handle401(); return }
     const data = await res.json()
-    if (typeof data.vibration_enabled !== 'boolean') return
 
     const local = loadSettings()
-    if (data.vibration_enabled === local.vibration) return   // already in sync
+    const merged = {
+      ...local,
+      vibration:   typeof data.vibration_enabled === 'boolean' ? data.vibration_enabled : local.vibration,
+      timezone:    data.timezone      ?? local.timezone,
+      morning:     data.morning       ?? local.morning,
+      evening:     data.evening       ?? local.evening,
+      night:       data.night         ?? local.night,
+      inABit:      data.in_a_bit      ?? local.inABit,
+      afterAWhile: data.after_a_while ?? local.afterAWhile
+    }
 
-    const s = { ...local, vibration: data.vibration_enabled }
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
+    if (JSON.stringify(merged) === JSON.stringify(local)) return   // already in sync
+
+    _writeLocal(merged)
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val }
+    set('s-morning',       merged.morning)
+    set('s-evening',       merged.evening)
+    set('s-night',         merged.night)
+    set('s-in-a-bit',      merged.inABit)
+    set('s-after-a-while', merged.afterAWhile)
+    set('s-timezone',      merged.timezone)
+    const d1 = document.getElementById('s-in-a-bit-display')
+    const d2 = document.getElementById('s-after-a-while-display')
+    if (d1) d1.textContent = merged.inABit
+    if (d2) d2.textContent = merged.afterAWhile
     const vt = document.getElementById('vibration-toggle')
-    if (vt) { data.vibration_enabled ? vt.classList.add('on') : vt.classList.remove('on') }
+    if (vt) { merged.vibration ? vt.classList.add('on') : vt.classList.remove('on') }
+
+    // This correction IS the new baseline — not a pending user edit — so
+    // fold it into the snapshot rather than leaving the Save/Cancel bar
+    // showing for a change the user never actually made.
+    _snapshot = _trackedFields()
+    _showSaveBar(false)
   } catch (err) {
-    console.error('could not sync vibration setting:', err)
+    console.error('could not sync settings:', err)
   }
 }
 

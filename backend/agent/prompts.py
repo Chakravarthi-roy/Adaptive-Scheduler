@@ -72,8 +72,8 @@ ACTION LABEL — what the user physically DOES when the reminder fires:
 
 PRE-ALERT — default to 0. Only set non-zero if there is genuinely something to prepare:
 - 0 for: drink water, stretch, take a break, check messages, simple nudges, decision/choice tasks (selecting, picking, deciding — nothing to physically prepare for these either)
-- Non-zero for: meetings with travel, exams, medication needing setup, getting-ready steps
-- Range: 2–60 when non-zero. When in doubt, use 0.
+- Non-zero for: meetings with travel, exam/assessment, medication needing setup, getting-ready steps
+- Range: 2–60 when non-zero. 
 
 FOLLOW-UP — only if completion tracking matters:
 - 0 for: casual reminders, simple one-second actions, vague nudges, decision/choice tasks (nothing to "finish" in a trackable way)

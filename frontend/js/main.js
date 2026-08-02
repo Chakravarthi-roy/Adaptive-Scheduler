@@ -17,7 +17,7 @@ import { isDemo, syncTokenToServiceWorker, logout } from './auth.js'
 syncTokenToServiceWorker()
 
 import { switchView } from './views.js'
-import { saveSettings, stepValue, toggleVibration, updateClock } from './settings.js'
+import { saveSettings, stepValue, toggleVibration, updateClock, onSettingsFieldChange, commitSettings, cancelSettingsChanges } from './settings.js'
 import { markDone, loadReminders } from './reminders.js'
 import { setupDemoMode, endTour, _nextTourStep, _pauseForAction, _waitForSave } from './tour.js'
 import { initPush } from './push.js'
@@ -29,6 +29,9 @@ window.switchView       = switchView
 window.saveSettings     = saveSettings
 window.stepValue        = stepValue
 window.toggleVibration  = toggleVibration
+window.onSettingsFieldChange  = onSettingsFieldChange
+window.commitSettings         = commitSettings
+window.cancelSettingsChanges  = cancelSettingsChanges
 window.markDone         = markDone
 window.logout           = logout
 window.endTour          = endTour

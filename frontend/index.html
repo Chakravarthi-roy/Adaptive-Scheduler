@@ -74,19 +74,19 @@
           <div class="settings-item">
             <span>Morning</span>
             <div class="settings-time-input">
-              <input type="time" id="s-morning" value="08:00" onchange="saveSettings()" />
+              <input type="time" id="s-morning" value="08:00" onchange="onSettingsFieldChange()" />
             </div>
           </div>
           <div class="settings-item">
             <span>Evening</span>
             <div class="settings-time-input">
-              <input type="time" id="s-evening" value="18:00" onchange="saveSettings()" />
+              <input type="time" id="s-evening" value="18:00" onchange="onSettingsFieldChange()" />
             </div>
           </div>
           <div class="settings-item">
             <span>Night</span>
             <div class="settings-time-input">
-              <input type="time" id="s-night" value="21:00" onchange="saveSettings()" />
+              <input type="time" id="s-night" value="21:00" onchange="onSettingsFieldChange()" />
             </div>
           </div>
         </div>
@@ -135,7 +135,7 @@
           <div class="settings-label">Timezone</div>
           <div class="settings-item">
             <span>Your timezone</span>
-            <select id="s-timezone" onchange="saveSettings()" class="settings-select">
+            <select id="s-timezone" onchange="onSettingsFieldChange()" class="settings-select">
               <option value="Asia/Kolkata">IST — India</option>
               <option value="America/New_York">EST — New York</option>
               <option value="America/Chicago">CST — Chicago</option>
@@ -159,6 +159,17 @@
           <div class="settings-item"><span>Backend</span><span class="settings-value">Render.com</span></div>
         </div>
 
+      </div>
+
+      <!-- Unsaved-changes bar — appears only while Time Words / Vague Durations /
+           Timezone have a pending, uncommitted change. Fixed-position so it floats
+           above the bottom nav regardless of scroll. -->
+      <div class="settings-savebar" id="settings-savebar">
+        <span class="settings-savebar-label">You have unsaved changes</span>
+        <div class="settings-savebar-actions">
+          <button class="settings-savebar-cancel" onclick="cancelSettingsChanges()">Cancel</button>
+          <button class="settings-savebar-save" onclick="commitSettings()">Save</button>
+        </div>
       </div>
     </main>
 

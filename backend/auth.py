@@ -186,7 +186,13 @@ def me(authorization: str | None = Header(default=None)):
         "nickname": user.nickname,
         "email": user.email,
         "is_demo": user.is_demo,
-        "vibration_enabled": user.vibration_enabled if user.vibration_enabled is not None else True
+        "vibration_enabled": user.vibration_enabled if user.vibration_enabled is not None else True,
+        "timezone":      user.timezone or "Asia/Kolkata",
+        "morning":       user.morning_time or "08:00",
+        "evening":       user.evening_time or "18:00",
+        "night":         user.night_time or "21:00",
+        "in_a_bit":      int(user.in_a_bit_minutes) if user.in_a_bit_minutes not in (None, "") else 10,
+        "after_a_while": int(user.after_a_while_minutes) if user.after_a_while_minutes not in (None, "") else 30,
     }
 
 
@@ -206,6 +212,18 @@ def update_settings(data: dict, authorization: str | None = Header(default=None)
         db_user = db.query(User).filter(User.id == user.id).first()
         if "vibration_enabled" in data:
             db_user.vibration_enabled = bool(data["vibration_enabled"])
+        if "timezone" in data:
+            db_user.timezone = data["timezone"]
+        if "morning" in data:
+            db_user.morning_time = data["morning"]
+        if "evening" in data:
+            db_user.evening_time = data["evening"]
+        if "night" in data:
+            db_user.night_time = data["night"]
+        if "in_a_bit" in data:
+            db_user.in_a_bit_minutes = str(data["in_a_bit"])
+        if "after_a_while" in data:
+            db_user.after_a_while_minutes = str(data["after_a_while"])
         db.commit()
         return {"status": "ok"}
     finally:
