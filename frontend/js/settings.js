@@ -167,13 +167,21 @@ export function populateSettings() {
         <div class="settings-item" style="gap:12px">
           <span style="font-size:12px;color:var(--muted);line-height:1.4">Create a free account to keep your reminders</span>
           <a href="/login.html" style="padding:7px 14px;border-radius:9px;background:var(--brown);color:var(--cream);font-size:12px;font-family:'DM Sans',sans-serif;font-weight:600;text-decoration:none;white-space:nowrap;flex-shrink:0">Sign up</a>
-        </div>` : `
-        <div class="settings-item">
-          <span>Sign out</span>
-          <button onclick="logout()" style="padding:6px 16px;border-radius:8px;background:var(--mint);border:1.5px solid var(--border);color:var(--muted);font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background 0.15s" onmouseover="this.style.background='var(--sage)'" onmouseout="this.style.background='var(--mint)'">Sign out</button>
-        </div>`}
+        </div>` : ``}
     `
     panel.insertBefore(section, panel.firstChild)
+  }
+
+  // Fixed, bottom-center Sign out button — only for real (non-demo) accounts,
+  // and only visible while Settings is the active view (it's a child of
+  // settings-panel, so it inherits that panel's show/hide from switchView()).
+  if (!isDemo() && !document.getElementById('signout-fixed-btn')) {
+    const btn = document.createElement('button')
+    btn.id        = 'signout-fixed-btn'
+    btn.className = 'signout-fixed-btn'
+    btn.textContent = 'Sign out'
+    btn.onclick = logout
+    document.getElementById('settings-panel').appendChild(btn)
   }
 }
 

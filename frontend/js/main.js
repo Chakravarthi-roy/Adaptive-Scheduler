@@ -21,6 +21,7 @@ import { saveSettings, stepValue, toggleVibration, updateClock, onSettingsFieldC
 import { markDone, loadReminders } from './reminders.js'
 import { setupDemoMode, endTour, _nextTourStep, _pauseForAction, _waitForSave } from './tour.js'
 import { initPush } from './push.js'
+import { initOfflineIndicator } from './offline.js'
 import './chat.js'   // attaches its own event listeners (mic/type/close-chat) on import
 import './modal.js'  // attaches its own event listeners (save/cancel) on import
 
@@ -73,4 +74,5 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDemoMode()
   loadReminders()
   initPush()
+  initOfflineIndicator()
 })
