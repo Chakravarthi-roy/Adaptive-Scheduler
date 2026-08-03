@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, ForeignKey
+from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, ForeignKey, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
@@ -76,6 +76,26 @@ class PushSubscription(Base):
     id                = Column(String, primary_key=True)
     user_id           = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     subscription_json = Column(Text, nullable=False)
+
+
+class PendingSignup(Base):
+    """
+    A signup that hasn't been verified yet. No `User` row exists until the
+    OTP is confirmed (see /verify-signup in auth.py) — so there's no
+    "unverified account" state to track on `User` at all, and nothing sits
+    half-created if the code is never entered. Just expires and gets swept
+    up by the cleanup cron.
+    """
+    __tablename__ = "pending_signups"
+
+    email         = Column(String, primary_key=True)   # one pending signup per email; a retry overwrites it
+    password_hash = Column(String, nullable=False)
+    nickname      = Column(String, nullable=True)
+    demo_token    = Column(String, nullable=True)       # carried through to the real signup once verified
+    otp_code      = Column(String, nullable=False)
+    otp_expires   = Column(DateTime, nullable=False)
+    attempts      = Column(Integer, default=0)          # wrong-code attempts; capped to slow brute-forcing
+    created_at    = Column(DateTime, nullable=True)
 
 
 def init_db():

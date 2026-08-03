@@ -1,12 +1,17 @@
 from fastapi import APIRouter, HTTPException, Header
-from database import SessionLocal, User, Reminder, PushSubscription
+from database import SessionLocal, User, Reminder, PushSubscription, PendingSignup
 from datetime import datetime, timedelta
-import bcrypt, uuid
+import bcrypt, uuid, secrets
 
 router = APIRouter()
 
 # How long a demo account is allowed to live before cleanup claims it
 DEMO_USER_TTL_HOURS = 12
+
+# Signup verification — a code sent to the email at signup, must be entered
+# before the real User row is created (see PendingSignup in database.py).
+OTP_TTL_MINUTES  = 10
+OTP_MAX_ATTEMPTS = 5
 
 
 
@@ -116,10 +121,30 @@ def run_demo_cleanup():
         db.close()
 
 
+# ─── Pending-signup cleanup ─────────────────────────────────────────────────
+# Signups that started but never got their OTP entered (typo'd email with no
+# working Back-button retry, code expired before they checked their inbox,
+# gave up, etc.) would otherwise sit in `pending_signups` forever — nothing
+# else ever deletes them. Swept on the same cron tick as demo cleanup.
+
+def run_pending_signup_cleanup():
+    db = SessionLocal()
+    try:
+        db.query(PendingSignup).filter(PendingSignup.otp_expires < datetime.utcnow()).delete()
+        db.commit()
+    finally:
+        db.close()
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/signup")
 def signup(data: dict):
+    """
+    Doesn't create the account yet — stages it as a PendingSignup and emails
+    a 4-digit code. The real User row (and login token) only gets created
+    once that code is confirmed via /verify-signup below.
+    """
     email      = (data.get("email") or "").strip().lower()
     password   = data.get("password") or ""
     nickname   = (data.get("nickname") or "").strip() or None
@@ -136,15 +161,75 @@ def signup(data: dict):
         if existing:
             raise HTTPException(status_code=400, detail="An account with this email already exists")
 
+        from email_sender import send_otp_email
+
+        code    = f"{secrets.randbelow(10000):04d}"
+        expires = datetime.utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
+
+        # One pending signup per email — re-submitting (e.g. after fixing a
+        # typo'd address via the Back button) just overwrites whatever was
+        # staged before, with a fresh code.
+        pending = db.query(PendingSignup).filter(PendingSignup.email == email).first()
+        if not pending:
+            pending = PendingSignup(email=email)
+            db.add(pending)
+
+        pending.password_hash = hash_password(password)
+        pending.nickname      = nickname
+        pending.demo_token    = demo_token
+        pending.otp_code      = code
+        pending.otp_expires   = expires
+        pending.attempts      = 0
+        pending.created_at    = datetime.utcnow()
+        db.commit()
+
+        send_otp_email(email, code)
+        return {"status": "pending", "email": email}
+    finally:
+        db.close()
+
+
+@router.post("/verify-signup")
+def verify_signup(data: dict):
+    """Confirms the OTP and, only now, actually creates the account."""
+    email = (data.get("email") or "").strip().lower()
+    code  = (data.get("code") or "").strip()
+
+    if not email or not code:
+        raise HTTPException(status_code=400, detail="Missing email or code")
+
+    db = SessionLocal()
+    try:
+        pending = db.query(PendingSignup).filter(PendingSignup.email == email).first()
+        if not pending:
+            raise HTTPException(status_code=400, detail="No pending signup for this email — please sign up again")
+
+        if pending.otp_expires < datetime.utcnow():
+            db.delete(pending)
+            db.commit()
+            raise HTTPException(status_code=400, detail="Code expired — please sign up again")
+
+        if pending.otp_code != code:
+            pending.attempts = (pending.attempts or 0) + 1
+            if pending.attempts >= OTP_MAX_ATTEMPTS:
+                db.delete(pending)
+                db.commit()
+                raise HTTPException(status_code=400, detail="Too many incorrect attempts — please sign up again")
+            db.commit()
+            raise HTTPException(status_code=400, detail="Incorrect code")
+
         user = User(
             id=str(uuid.uuid4()),
             email=email,
-            password_hash=hash_password(password),
-            nickname=nickname,
+            password_hash=pending.password_hash,
+            nickname=pending.nickname,
             created_at=datetime.utcnow(),
             is_demo=False
         )
         db.add(user)
+
+        demo_token = pending.demo_token
+        db.delete(pending)
         db.commit()
 
         if demo_token:

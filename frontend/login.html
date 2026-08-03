@@ -216,7 +216,7 @@
     <main class="content auth-content">
 
       <!-- Auth Card -->
-      <div class="auth-card">
+      <div class="auth-card" id="auth-main-card">
         <p class="auth-heading" id="auth-heading">Sign in</p>
         <p class="auth-sub" id="auth-sub">good to have you back</p>
 
@@ -284,7 +284,25 @@
           </button>
         </div>
       </div>
-      <div class="demo-section">
+      <!-- Verify Email Panel — shown after signup, before the account actually exists -->
+      <div id="otp-panel" style="display:none;width:100%;max-width:400px;margin-top:12px">
+        <div class="auth-card">
+          <p class="auth-heading" style="font-size:18px">Verify your email</p>
+          <p class="auth-sub" id="otp-sub">Enter the code we sent</p>
+          <div class="auth-error" id="otp-error"></div>
+          <div class="field">
+            <label>Verification code</label>
+            <input type="text" id="otp-code" inputmode="numeric" maxlength="4" placeholder="0000"
+              style="width:100%;box-sizing:border-box;text-align:center;font-family:'DM Mono',monospace;font-size:22px;letter-spacing:0.35em" />
+          </div>
+          <button class="auth-btn" id="otp-submit" onclick="submitOtp()">Verify &amp; create account</button>
+          <button type="button" onclick="backFromOtp()"
+            style="width:100%;margin-top:8px;padding:9px;background:none;border:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--muted);cursor:pointer">
+            ← Back
+          </button>
+        </div>
+      </div>
+      <div class="demo-section" id="demo-section">
         <div class="demo-divider"><span>or</span></div>
         <button class="btn-demo" id="demo-btn" onclick="tryDemo()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -382,7 +400,10 @@
 
     // ── Enter key support ──────────────────────────────────────────────────
     document.addEventListener('keydown', e => {
-      if (e.key === 'Enter') submitAuth()
+      if (e.key !== 'Enter') return
+      if (document.getElementById('otp-panel').style.display === 'block')    { submitOtp(); return }
+      if (document.getElementById('forgot-panel').style.display === 'block') { submitForgotPassword(); return }
+      submitAuth()
     })
 
     // ── Error handling ─────────────────────────────────────────────────────
@@ -408,6 +429,8 @@
     }
 
     // ── Submit auth ────────────────────────────────────────────────────────
+    let pendingSignupEmail = null
+
     async function submitAuth() {
       hideError()
       const email    = (document.getElementById('auth-email').value || '').trim()
@@ -423,7 +446,7 @@
         const endpoint = currentTab === 'login' ? '/login' : '/signup'
 
         // If signing up from demo mode, send the demo token so the backend
-        // can transfer the demo reminder to the new real account
+        // can transfer the demo reminder to the new real account once verified
         const isDemoMode = localStorage.getItem('scheduler_is_demo') === 'true'
         const demoToken  = isDemoMode ? localStorage.getItem('scheduler_token') : null
 
@@ -444,7 +467,15 @@
           return
         }
 
-        // Save to localStorage and head to the app
+        if (currentTab === 'signup') {
+          // Account doesn't exist yet — a code was just emailed. Move to
+          // the verify step instead of logging in.
+          pendingSignupEmail = email
+          showOtpStep(email)
+          return
+        }
+
+        // Login — real account, real token, straight through as before.
         localStorage.setItem('scheduler_token', data.token)
         localStorage.setItem('scheduler_nickname', data.nickname || email.split('@')[0])
         localStorage.setItem('scheduler_email', data.email)
@@ -457,6 +488,72 @@
         console.error(err)
       } finally {
         setLoading(false)
+      }
+    }
+
+    // ── Verify email (OTP) step ──────────────────────────────────────────
+    function showOtpStep(email) {
+      document.getElementById('auth-main-card').style.display = 'none'
+      document.getElementById('demo-section').style.display   = 'none'
+      document.getElementById('otp-panel').style.display      = 'block'
+      document.getElementById('otp-sub').textContent = `Sent a code to ${email}`
+      document.getElementById('otp-code').value = ''
+      document.getElementById('otp-error').classList.remove('show')
+      document.getElementById('otp-code').focus()
+    }
+
+    // Wrong email typed at signup — go back and fix it. No cleanup needed:
+    // resubmitting signup with the corrected email just overwrites whatever
+    // code was staged for the old (mistyped) one.
+    function backFromOtp() {
+      document.getElementById('otp-panel').style.display      = 'none'
+      document.getElementById('auth-main-card').style.display = 'block'
+      document.getElementById('demo-section').style.display   = 'block'
+    }
+
+    function showOtpError(msg) {
+      const el = document.getElementById('otp-error')
+      el.textContent = msg
+      el.classList.add('show')
+    }
+
+    async function submitOtp() {
+      document.getElementById('otp-error').classList.remove('show')
+      const code = (document.getElementById('otp-code').value || '').trim()
+      if (!code) { showOtpError('Please enter the code'); return }
+
+      const btn = document.getElementById('otp-submit')
+      btn.disabled    = true
+      btn.textContent = 'Verifying…'
+
+      try {
+        const res = await fetch(`${API_BASE}/verify-signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: pendingSignupEmail, code })
+        })
+        const data = await res.json()
+
+        if (!res.ok) {
+          showOtpError(data.detail || 'Incorrect code. Try again.')
+          btn.disabled    = false
+          btn.textContent = 'Verify & create account'
+          return
+        }
+
+        // Verified — the account was just created server-side. Log straight in.
+        localStorage.setItem('scheduler_token', data.token)
+        localStorage.setItem('scheduler_nickname', data.nickname || pendingSignupEmail.split('@')[0])
+        localStorage.setItem('scheduler_email', data.email)
+        localStorage.removeItem('scheduler_is_demo')
+        _saveTokenForServiceWorker(data.token)
+        window.location.replace('/')
+
+      } catch (err) {
+        showOtpError('Could not connect. Try again.')
+        btn.disabled    = false
+        btn.textContent = 'Verify & create account'
+        console.error(err)
       }
     }
 
