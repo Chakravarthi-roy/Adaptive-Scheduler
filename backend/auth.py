@@ -13,6 +13,12 @@ DEMO_USER_TTL_HOURS = 12
 OTP_TTL_MINUTES  = 10
 OTP_MAX_ATTEMPTS = 5
 
+# Both temporarily off — real users can't receive emails yet (no verified
+# domain with the email provider, see email_sender.py), so the working code
+# below is disconnected rather than removed. Flip these back on once a
+# domain's verified.
+FORGOT_PASSWORD_ENABLED = False
+
 
 
 
@@ -141,9 +147,11 @@ def run_pending_signup_cleanup():
 @router.post("/signup")
 def signup(data: dict):
     """
-    Doesn't create the account yet — stages it as a PendingSignup and emails
-    a 4-digit code. The real User row (and login token) only gets created
-    once that code is confirmed via /verify-signup below.
+    Creates the account immediately — no OTP step. (OTP-based verification
+    was built and still works end-to-end via /verify-signup below, but real
+    users can't receive the code yet since no domain is verified with the
+    email provider — see email_sender.py. Disconnected here rather than
+    ripped out, so it's a quick flip back on once a domain's ready.)
     """
     email      = (data.get("email") or "").strip().lower()
     password   = data.get("password") or ""
@@ -161,37 +169,37 @@ def signup(data: dict):
         if existing:
             raise HTTPException(status_code=400, detail="An account with this email already exists")
 
-        from email_sender import send_otp_email
-
-        code    = f"{secrets.randbelow(10000):04d}"
-        expires = datetime.utcnow() + timedelta(minutes=OTP_TTL_MINUTES)
-
-        # One pending signup per email — re-submitting (e.g. after fixing a
-        # typo'd address via the Back button) just overwrites whatever was
-        # staged before, with a fresh code.
-        pending = db.query(PendingSignup).filter(PendingSignup.email == email).first()
-        if not pending:
-            pending = PendingSignup(email=email)
-            db.add(pending)
-
-        pending.password_hash = hash_password(password)
-        pending.nickname      = nickname
-        pending.demo_token    = demo_token
-        pending.otp_code      = code
-        pending.otp_expires   = expires
-        pending.attempts      = 0
-        pending.created_at    = datetime.utcnow()
+        user = User(
+            id=str(uuid.uuid4()),
+            email=email,
+            password_hash=hash_password(password),
+            nickname=nickname,
+            created_at=datetime.utcnow(),
+            is_demo=False
+        )
+        db.add(user)
         db.commit()
 
-        send_otp_email(email, code)
-        return {"status": "pending", "email": email}
+        if demo_token:
+            from database import Session as SessionModel
+            demo_session = db.query(SessionModel).filter(SessionModel.token == demo_token).first()
+            if demo_session:
+                db.query(SessionModel).filter(SessionModel.token == demo_token).delete()
+                db.commit()
+
+        token = create_session(user.id)
+        return {"token": token, "nickname": user.nickname, "email": user.email}
     finally:
         db.close()
 
 
 @router.post("/verify-signup")
 def verify_signup(data: dict):
-    """Confirms the OTP and, only now, actually creates the account."""
+    """
+    Not called by the live signup flow anymore (see /signup above) — kept
+    working so it's ready to reconnect once a verified domain makes OTP
+    delivery to real users actually possible.
+    """
     email = (data.get("email") or "").strip().lower()
     code  = (data.get("code") or "").strip()
 
@@ -339,6 +347,9 @@ def create_demo():
 
 @router.post("/forgot-password")
 def forgot_password(data: dict):
+    if not FORGOT_PASSWORD_ENABLED:
+        raise HTTPException(status_code=503, detail="Password reset isn't available yet — check back soon!")
+
     email = (data.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="Please enter your email")

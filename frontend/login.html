@@ -254,7 +254,7 @@
           </div>
         </div>
 
-        <div id="forgot-link" style="text-align:right;margin-top:-8px;margin-bottom:4px">
+        <div id="forgot-link" style="display:none;text-align:right;margin-top:-8px;margin-bottom:4px">
           <button type="button" onclick="showForgotPassword()"
             style="background:none;border:none;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--muted);cursor:pointer;padding:0;text-decoration:underline">
             Forgot password?
@@ -467,15 +467,8 @@
           return
         }
 
-        if (currentTab === 'signup') {
-          // Account doesn't exist yet — a code was just emailed. Move to
-          // the verify step instead of logging in.
-          pendingSignupEmail = email
-          showOtpStep(email)
-          return
-        }
-
-        // Login — real account, real token, straight through as before.
+        // Account is created immediately by /signup now (OTP step is
+        // disconnected — see auth.py). Log straight in for both tabs.
         localStorage.setItem('scheduler_token', data.token)
         localStorage.setItem('scheduler_nickname', data.nickname || email.split('@')[0])
         localStorage.setItem('scheduler_email', data.email)
