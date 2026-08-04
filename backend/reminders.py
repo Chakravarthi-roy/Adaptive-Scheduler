@@ -55,18 +55,28 @@ def save_reminder(request: Request, data: dict, authorization: str | None = Head
 
 @router.get("/reminders")
 def get_reminders(authorization: str | None = Header(default=None)):
+    """
+    Same ownership filter for everyone, admin included. Demo reminders only
+    become visible to admin once _cleanup_old_demo_users (auth.py) actually
+    reassigns their user_id to the admin's — around the ~12h TTL mark, right
+    before the demo account itself is deleted — not the instant a demo user
+    creates one.
+
+    (Previously this had an `is_admin` branch that OR'd in
+    `Reminder.is_demo_reminder == True`, which made every live demo user's
+    reminder visible to admin immediately on creation — the OR-clause was
+    actually redundant for its intended purpose too: by the time cleanup
+    reassigns user_id, the plain filter below already matches on its own.
+    is_demo_reminder itself is untouched — the frontend still uses it to
+    style a reassigned reminder in the amber "demo visitor" look even after
+    it's really admin's.)
+    """
     user = _require_user(authorization)
     db   = SessionLocal()
     try:
-        # Admin users also see demo reminders from all users (in a different color on the frontend)
-        if user.is_admin:
-            reminders = db.query(Reminder).filter(
-                (Reminder.user_id == user.id) | (Reminder.is_demo_reminder == True)
-            ).order_by(Reminder.datetime).all()
-        else:
-            reminders = db.query(Reminder).filter(
-                Reminder.user_id == user.id
-            ).order_by(Reminder.datetime).all()
+        reminders = db.query(Reminder).filter(
+            Reminder.user_id == user.id
+        ).order_by(Reminder.datetime).all()
 
         return [
             {
@@ -113,16 +123,10 @@ def mark_done(reminder_id: str, authorization: str | None = Header(default=None)
     user = _require_user(authorization)
     db   = SessionLocal()
     try:
-        if user.is_admin:
-            reminder = db.query(Reminder).filter(
-                Reminder.id == reminder_id,
-                (Reminder.user_id == user.id) | (Reminder.is_demo_reminder == True)
-            ).first()
-        else:
-            reminder = db.query(Reminder).filter(
-                Reminder.id == reminder_id,
-                Reminder.user_id == user.id
-            ).first()
+        reminder = db.query(Reminder).filter(
+            Reminder.id == reminder_id,
+            Reminder.user_id == user.id
+        ).first()
         if not reminder:
             return {"status": "not found"}
 
