@@ -172,13 +172,13 @@ export function populateSettings() {
     panel.insertBefore(section, panel.firstChild)
   }
 
-  // Fixed, bottom-center Sign out button — only for real (non-demo) accounts,
-  // and only visible while Settings is the active view (it's a child of
-  // settings-panel, so it inherits that panel's show/hide from switchView()).
-  if (!isDemo() && !document.getElementById('signout-fixed-btn')) {
+  // Sign out button — placed after the About group, inside the normal
+  // scrolling content (NOT floating/fixed like the bottom nav). Only for
+  // real (non-demo) accounts.
+  if (!isDemo() && !document.getElementById('signout-btn')) {
     const btn = document.createElement('button')
-    btn.id        = 'signout-fixed-btn'
-    btn.className = 'signout-fixed-btn'
+    btn.id        = 'signout-btn'
+    btn.className = 'signout-btn'
     btn.textContent = 'Sign out'
     btn.onclick = logout
     document.getElementById('settings-panel').appendChild(btn)

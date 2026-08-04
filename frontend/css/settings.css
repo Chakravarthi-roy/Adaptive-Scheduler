@@ -125,7 +125,7 @@
 .settings-savebar {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--nav-h) + var(--nav-gap) + 78px);
+  bottom: calc(var(--nav-h) + var(--nav-gap) + 14px);
   transform: translateX(-50%) translateY(12px);
   width: min(calc(100dvw - 32px), calc(var(--app-w) - 32px));
   background: var(--surface);
@@ -178,24 +178,22 @@
 .settings-savebar-save:hover { background: #c48a4a; }
 
 /* ── Sign out — fixed, bottom-center, red (the destructive/final action) ─ */
-.signout-fixed-btn {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--nav-h) + var(--nav-gap) + 14px);
-  transform: translateX(-50%);
-  width: min(calc(100dvw - 32px), calc(var(--app-w) - 32px));
-  padding: 12px 18px;
-  border-radius: 14px;
+/* ── Sign out — sits at the end of the settings list, below About. Scrolls
+   with the page like everything else (NOT fixed/floating like the nav). ── */
+.signout-btn {
+  display: block;
+  margin: 22px auto 8px;
+  padding: 10px 26px;
+  border-radius: 20px;
   background: #c0392b;
   color: #fff;
   border: none;
   font-family: 'DM Sans', sans-serif;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 6px 20px rgba(192,57,43,0.3);
+  box-shadow: 0 4px 14px rgba(192,57,43,0.22);
   transition: background 0.15s, transform 0.1s;
-  z-index: 14;
 }
-.signout-fixed-btn:hover  { background: #a5311f; }
-.signout-fixed-btn:active { transform: translateX(-50%) scale(0.98); }
+.signout-btn:hover  { background: #a5311f; }
+.signout-btn:active { transform: scale(0.98); }
