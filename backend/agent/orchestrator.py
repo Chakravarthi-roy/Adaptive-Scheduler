@@ -40,7 +40,7 @@ def _call_llm(full_messages: list):
     distinguishable from a downstream parsing or tool failure."""
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=full_messages,
             temperature=0
         )
