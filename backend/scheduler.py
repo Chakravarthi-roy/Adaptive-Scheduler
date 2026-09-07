@@ -59,6 +59,18 @@ def build_notification(reminder, is_pre_alert=False, vibration_enabled=True):
         }
 
 
+def _parse_minutes(value, default=0):
+    """Safe int parse for the string-typed *_minutes columns. Never trust
+    plain truthiness on these — '0' is a non-empty string and is truthy,
+    which previously caused a real bug (see check_reminders section 3)."""
+    if value in (None, ""):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def check_reminders():
     db = SessionLocal()
     try:
@@ -167,20 +179,30 @@ def check_reminders():
         ).all()
 
         for reminder in missed_candidates:
-            # skip if follow_up hasn't fired yet — let follow-up handle it first
-            if reminder.follow_up_minutes and not reminder.follow_up_sent:
+            # skip if a REAL follow-up hasn't fired yet — let follow-up handle
+            # it first. FIXED: follow_up_minutes is a string column, so a
+            # stored "0" (a completely valid "no follow-up wanted" value) used
+            # to be treated as truthy here, permanently blocking this check
+            # for any such reminder since section 4 never sends/marks a
+            # 0-minute follow-up as sent. Parse it as a real int instead.
+            fu_minutes = _parse_minutes(reminder.follow_up_minutes, default=0)
+            if fu_minutes > 0 and not reminder.follow_up_sent:
                 continue
+
             missed_threshold = reminder.datetime + timedelta(minutes=60)
             if now >= missed_threshold:
                 reminder.missed = True
                 missed_count += 1
-                # re-fire as missed notification
+                # re-fire as missed notification — "I'll do it" re-schedules
+                # the reminder (see /reminders/{id}/acknowledge-missed),
+                # it does NOT mark it done. There's no "done" button on a
+                # missed notification anymore.
                 send_notification(
                     f"Missed: {reminder.title}",
                     "You didn't action this reminder",
                     persistent=True,
-                    action=reminder.action_label or "done",
-                    action_label="Done now ✓",
+                    action="will_do",
+                    action_label="I'll do it ⏳",
                     reminder_id=reminder.id,
                     is_pre_alert=False,
                     vibrate=get_vibration_pref(reminder.user_id),
@@ -235,11 +257,3 @@ def check_reminders():
 
     finally:
         db.close()
-
-
-# schedule.every(1).minutes.do(check_reminders)
-
-# print("scheduler running...")
-# while True:
-#     schedule.run_pending()
-#     time.sleep(10)

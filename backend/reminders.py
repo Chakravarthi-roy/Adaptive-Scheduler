@@ -3,9 +3,11 @@ from database import SessionLocal, Reminder
 from auth import get_user_from_token
 # from rate_limit import limiter
 from datetime import datetime, timedelta
-import json, uuid
+import json, uuid, pytz
 
 router = APIRouter()
+
+IST = pytz.timezone('Asia/Kolkata')
 
 
 def _require_user(authorization):
@@ -145,5 +147,55 @@ def mark_done(reminder_id: str, authorization: str | None = Header(default=None)
 
         db.commit()
         return {"status": "marked done"}
+    finally:
+        db.close()
+
+
+@router.post("/reminders/{reminder_id}/acknowledge-missed")
+def acknowledge_missed(reminder_id: str, authorization: str | None = Header(default=None)):
+    """
+    "I'll do it ⏳" — tapped from a MISSED reminder's notification. This does
+    NOT mark the reminder done (there's no done button on a missed
+    notification anymore, by design — see scheduler.py). Instead it
+    re-schedules the reminder to fire again after its own follow_up_minutes
+    duration, counted from RIGHT NOW (the moment this was tapped / the
+    missed notification's effective acknowledgement time) — deliberately
+    NOT from the reminder's original datetime, so a reminder that was missed
+    hours late doesn't instantly re-fire or get a follow-up time that's
+    already in the past.
+
+    Resetting notified/pre_alerted/missed/follow_up_sent lets the normal
+    check_reminders() cycle in scheduler.py pick this back up exactly like
+    any other pending reminder — no separate code path needed for it.
+    """
+    user = _require_user(authorization)
+    db   = SessionLocal()
+    try:
+        reminder = db.query(Reminder).filter(
+            Reminder.id == reminder_id,
+            Reminder.user_id == user.id
+        ).first()
+        if not reminder:
+            return {"status": "not found"}
+
+        # Reuse the reminder's own follow-up duration as the "remind me
+        # again in X" wait. Fall back to 15 min if none was ever set —
+        # there's nothing else sensible to base it on in that case.
+        stored = reminder.follow_up_minutes
+        try:
+            minutes = int(stored) if stored not in (None, "") else 15
+            if minutes <= 0:
+                minutes = 15
+        except (TypeError, ValueError):
+            minutes = 15
+
+        now = datetime.now(IST).replace(tzinfo=None)
+        reminder.datetime       = now + timedelta(minutes=minutes)
+        reminder.missed         = False
+        reminder.notified       = False
+        reminder.pre_alerted    = False
+        reminder.follow_up_sent = False
+        db.commit()
+        return {"status": "acknowledged", "next_reminder_at": reminder.datetime.isoformat()}
     finally:
         db.close()

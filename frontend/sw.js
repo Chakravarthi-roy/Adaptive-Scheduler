@@ -112,8 +112,8 @@ self.addEventListener('push', e => {
     // Pre-alert: just one OK button — Chrome adds Unsubscribe automatically, keep it simple
     actions.push({ action: 'dismiss_pre', title: 'OK 👍' })
   } else {
-    // On-time: just the done action — no snooze button, keeps it uncluttered on mobile
-    // User can snooze by tapping the notification body (opens app) if needed
+    // On-time / missed: whatever action the backend sent (e.g. the reminder's
+    // own action_label for on-time, or 'will_do' / "I'll do it ⏳" for missed)
     if (action && action_label) {
       actions.push({ action, title: action_label })
     }
@@ -138,7 +138,7 @@ self.addEventListener('push', e => {
 })
 
 self.addEventListener('notificationclick', e => {
-  const action = e.action  // '' = body tapped, 'snooze' / 'dismiss_pre' / custom = button tapped
+  const action = e.action  // '' = body tapped, 'snooze' / 'dismiss_pre' / 'will_do' / custom = button tapped
   const reminder_id = e.notification.data?.reminder_id
   const is_pre_alert = e.notification.data?.is_pre_alert || false
   e.notification.close()
@@ -165,6 +165,20 @@ self.addEventListener('notificationclick', e => {
 
   // Pre-alert OK dismiss — just close, nothing else
   if (action === 'dismiss_pre' || is_pre_alert) {
+    return
+  }
+
+  // "I'll do it" from a MISSED reminder — re-schedules the reminder to fire
+  // again after its own follow-up duration, counted from now (not the
+  // original time). Deliberately does NOT mark it done — there's no done
+  // action on a missed notification anymore.
+  if (action === 'will_do') {
+    if (reminder_id) {
+      e.waitUntil(
+        authedFetch(`${API_BASE}/reminders/${reminder_id}/acknowledge-missed`, { method: 'POST' })
+          .catch(err => console.log('acknowledge-missed failed:', err))
+      )
+    }
     return
   }
 
